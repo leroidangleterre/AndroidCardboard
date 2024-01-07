@@ -83,6 +83,15 @@ namespace ndk_hello_cardboard {
     Matrix4x4 GetTranslationMatrix(const std::array<float, 3>& translation);
 
 /**
+ * Construct a Rotation matrix, just around the Z-axis.
+ *
+ * @param translation Translation array
+ * @return Obtained matrix
+ */
+
+    Matrix4x4 GetZRotationMatrix(const float& angle);
+
+/**
  * Computes the angle between two vectors.
  *
  * @param vec1 First vector

@@ -75,6 +75,8 @@ namespace ndk_hello_cardboard {
       gl_FragColor = texture2D(u_Texture, vec2(v_UV.x, 1.0 - v_UV.y));
     })glsl";
 
+        int frame;
+
     }  // anonymous namespace
 
     HelloCardboardApp::HelloCardboardApp(JavaVM* vm, jobject obj,
@@ -104,6 +106,8 @@ namespace ndk_hello_cardboard {
 
         Cardboard_initializeAndroid(vm, obj);
         head_tracker_ = CardboardHeadTracker_create();
+
+        frame = 0;
     }
 
     HelloCardboardApp::~HelloCardboardApp() {
@@ -134,8 +138,12 @@ namespace ndk_hello_cardboard {
 
         HELLOCARDBOARD_CHECK(room_.Initialize(obj_position_param_, obj_uv_param_,
                                               "CubeRoom.obj", asset_mgr_));
+        HELLOCARDBOARD_CHECK(cube_.Initialize(obj_position_param_, obj_uv_param_,
+                                              "arthurCube.obj", asset_mgr_));
         HELLOCARDBOARD_CHECK(
                 room_tex_.Initialize(env, java_asset_mgr_, "CubeRoom_BakedDiffuse.png"));
+        HELLOCARDBOARD_CHECK(
+                cube_tex_.Initialize(env, java_asset_mgr_, "arthur_cube.png"));
         HELLOCARDBOARD_CHECK(target_object_meshes_[0].Initialize(
                 obj_position_param_, obj_uv_param_, "Icosahedron.obj", asset_mgr_));
         HELLOCARDBOARD_CHECK(target_object_not_selected_textures_[0].Initialize(
@@ -156,7 +164,8 @@ namespace ndk_hello_cardboard {
                 env, java_asset_mgr_, "TriSphere_Pink_BakedDiffuse.png"));
 
         // Target object first appears directly in front of user.
-        model_target_ = GetTranslationMatrix({0.0f, 1.5f, kMinTargetDistance});
+        target_position_matrix = GetTranslationMatrix({0.0f, 1.5f, -kMinTargetDistance});
+        cube_position_matrix = GetTranslationMatrix({0.0f, 0.0f, 0.0f});
 
         CHECKGLERROR("OnSurfaceCreated");
     }
@@ -189,6 +198,13 @@ namespace ndk_hello_cardboard {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        float frame_float = (float)frame;
+//        float cubeCurrentX = frame_float/100;
+        float angle = frame_float/1000;
+//        cube_position_matrix = GetTranslationMatrix({cubeCurrentX, 0.0f, 0.0f});
+        cube_position_matrix = GetZRotationMatrix(angle);
+
+
         // Draw eyes views
         for (int eye = 0; eye < 2; ++eye) {
             glViewport(eye == kLeft ? 0 : screen_width_ / 2, 0, screen_width_ / 2,
@@ -197,11 +213,12 @@ namespace ndk_hello_cardboard {
             Matrix4x4 eye_matrix = GetMatrixFromGlArray(eye_matrices_[eye]);
             Matrix4x4 eye_view = eye_matrix * head_view_;
 
-            Matrix4x4 projection_matrix =
-                    GetMatrixFromGlArray(projection_matrices_[eye]);
-            Matrix4x4 modelview_target = eye_view * model_target_;
-            modelview_projection_target_ = projection_matrix * modelview_target;
-            modelview_projection_room_ = projection_matrix * eye_view;
+            Matrix4x4 eye_projection_matrix = GetMatrixFromGlArray(projection_matrices_[eye]);
+            Matrix4x4 modelview_target = eye_view * target_position_matrix;
+            Matrix4x4 modelview_cube = eye_view * cube_position_matrix;
+            modelview_projection_target_ = eye_projection_matrix * modelview_target;
+            modelview_projection_room_ = eye_projection_matrix * eye_view;
+            modelview_projection_cube_ = eye_projection_matrix * modelview_cube;
 
             // Draw room and target
             DrawWorld();
@@ -375,7 +392,12 @@ namespace ndk_hello_cardboard {
     }
 
     void HelloCardboardApp::DrawWorld() {
+        frame++;
+        std::string text="arthur: frame "+std::to_string(frame);
+        LOGE("%s", text.c_str());
+        LOGE("coucou");
         DrawRoom();
+        DrawCube();
         DrawTarget();
     }
 
@@ -409,6 +431,19 @@ namespace ndk_hello_cardboard {
         CHECKGLERROR("DrawRoom");
     }
 
+    void HelloCardboardApp::DrawCube() {
+        glUseProgram(obj_program_);
+
+        std::array<float, 16> room_array = modelview_projection_cube_.ToGlArray();
+        glUniformMatrix4fv(obj_modelview_projection_param_, 1, GL_FALSE,
+                           room_array.data());
+
+        cube_tex_.Bind();
+        cube_.Draw();
+
+        CHECKGLERROR("DrawCube");
+    }
+
     void HelloCardboardApp::HideTarget() {
         cur_target_object_ = RandomUniformInt(kTargetMeshCount);
 
@@ -418,13 +453,13 @@ namespace ndk_hello_cardboard {
         std::array<float, 3> target_position = {std::cos(angle) * distance, height,
                                                 std::sin(angle) * distance};
 
-        model_target_ = GetTranslationMatrix(target_position);
+        target_position_matrix = GetTranslationMatrix(target_position);
     }
 
     bool HelloCardboardApp::IsPointingAtTarget() {
         // Compute vectors pointing towards the reticle and towards the target object
         // in head space.
-        Matrix4x4 head_from_target = head_view_ * model_target_;
+        Matrix4x4 head_from_target = head_view_ * target_position_matrix;
 
         const std::array<float, 4> unit_quaternion = {0.f, 0.f, 0.f, 1.f};
         const std::array<float, 4> point_vector = {0.f, 0.f, -1.f, 0.f};

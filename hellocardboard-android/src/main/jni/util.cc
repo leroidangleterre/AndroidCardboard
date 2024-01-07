@@ -419,6 +419,17 @@ Matrix4x4 GetTranslationMatrix(const std::array<float, 3>& translation) {
            {translation.at(0), translation.at(1), translation.at(2), 1.0f}}};
 }
 
+Matrix4x4 GetZRotationMatrix(const float& angle) {
+
+    float cosa= cos(angle);
+    float sina= sin(angle);
+
+    return {{{cosa, sina, 0.0f, 0.0f},
+             {0.0f, 0.0f, 1.0f, 0.0f},
+             {sina, -cosa, 0.0f, 0.0f},
+             {0.0f, 0.0f,0.0f, 1.0f}}};
+}
+
 float AngleBetweenVectors(const std::array<float, 4>& vec1,
                           const std::array<float, 4>& vec2) {
   return std::acos(
@@ -493,8 +504,10 @@ bool TexturedMesh::Initialize(GLuint position_attrib, GLuint uv_attrib,
   std::vector<GLfloat> normals;
   if (!LoadObjFile(asset_mgr, obj_file_path, &vertices_, &normals, &uv_,
                    &indices_)) {
+        LOGE("arthur load cube KO");
     return false;
   }
+    LOGE("arthur load cube OK");
   return true;
 }
 
@@ -530,6 +543,7 @@ bool Texture::Initialize(JNIEnv* env, jobject java_asset_mgr,
     return false;
   }
   glGenerateMipmap(GL_TEXTURE_2D);
+    LOGE("arthur texture load ok %s", texture_path.c_str());
   return true;
 }
 
@@ -537,6 +551,7 @@ void Texture::Bind() const {
   HELLOCARDBOARD_CHECK(texture_id_ != 0);
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, texture_id_);
+//    LOGE("arthur: Texture::Bind(), texture_id_ is %d", texture_id_);
 }
 
 }  // namespace ndk_hello_cardboard

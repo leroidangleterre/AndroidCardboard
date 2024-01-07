@@ -140,6 +140,11 @@ namespace ndk_hello_cardboard {
         void DrawRoom();
 
         /**
+         * Draws the cube
+         */
+        void DrawCube();
+
+        /**
          * Finds a new random position for the target object.
          */
         void HideTarget();
@@ -181,13 +186,17 @@ namespace ndk_hello_cardboard {
         GLuint obj_modelview_projection_param_;
 
         Matrix4x4 head_view_;
-        Matrix4x4 model_target_;
+        Matrix4x4 target_position_matrix;
+        Matrix4x4 cube_position_matrix;
 
         Matrix4x4 modelview_projection_target_;
         Matrix4x4 modelview_projection_room_;
+        Matrix4x4 modelview_projection_cube_;
 
         TexturedMesh room_;
+        TexturedMesh cube_;
         Texture room_tex_;
+        Texture cube_tex_;
 
         std::vector<TexturedMesh> target_object_meshes_;
         std::vector<Texture> target_object_not_selected_textures_;
