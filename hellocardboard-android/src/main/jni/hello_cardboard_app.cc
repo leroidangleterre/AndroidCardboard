@@ -100,7 +100,9 @@ namespace ndk_hello_cardboard {
               target_object_meshes_(kTargetMeshCount),
               target_object_not_selected_textures_(kTargetMeshCount),
               target_object_selected_textures_(kTargetMeshCount),
-              cur_target_object_(RandomUniformInt(kTargetMeshCount)) {
+              cur_target_object_(RandomUniformInt(kTargetMeshCount)),
+              initMenuCoordinatesArray_(0),
+              texture_array_(10){
         JNIEnv* env;
         vm->GetEnv((void**)&env, JNI_VERSION_1_6);
         java_asset_mgr_ = env->NewGlobalRef(asset_mgr_obj);
@@ -128,6 +130,8 @@ namespace ndk_hello_cardboard {
         viewer_position_x = 0;
         viewer_position_y = -1;
         viewer_position_z = 0;
+
+        setupInitMenuCoordinates();
     }
 
     HelloCardboardApp::~HelloCardboardApp() {
@@ -184,6 +188,11 @@ namespace ndk_hello_cardboard {
                 env, java_asset_mgr_, "TriSphere_Blue_BakedDiffuse.png"));
         HELLOCARDBOARD_CHECK(target_object_selected_textures_[2].Initialize(
                 env, java_asset_mgr_, "TriSphere_Pink_BakedDiffuse.png"));
+
+        HELLOCARDBOARD_CHECK(texture_array_[0].Initialize(
+                env, java_asset_mgr_, "menu_headset.png"));
+        HELLOCARDBOARD_CHECK(texture_array_[1].Initialize(
+                env, java_asset_mgr_, "menu_controller.png"));
 
         // Target object first appears directly in front of user.
         target_position_matrix = GetTranslationMatrix({0.0f, 1.5f, -kMinTargetDistance});
@@ -285,7 +294,7 @@ namespace ndk_hello_cardboard {
     }
 
     void HelloCardboardApp::DefineHeadsetOrController() {
-
+        LOGD("arthur DefineHeadsetOrController");
         // When the phone is set to be the headset, we may change the player's coordinates
         //        viewer_position_x = -2.0f;
         //        viewer_position_y = kDefaultFloorHeight;
@@ -459,29 +468,33 @@ namespace ndk_hello_cardboard {
         }
     }
 
+    void HelloCardboardApp::setupInitMenuCoordinates(){
 
-    // Draw the menu cubes, with the appropriate textures
-    void HelloCardboardApp::DrawInitMenu(Matrix4x4 projectionMatrix) {
-        int nbRows = 7;
-        int nbCubesPerRow = 12;
+        for(int row= -nbMenuRows / 2; row < nbMenuRows / 2; row++) {
 
-        for(int row=-nbRows/2; row<nbRows/2; row++){
-
-            for(int rank = 0; rank < nbCubesPerRow; rank++){
-                double angle = rank * 2*M_PI / nbCubesPerRow;
+            for (int rank = 0; rank < nbMenuCubesPerRow; rank++) {
+                double angle = rank * 2 * M_PI / nbMenuCubesPerRow;
                 double radius = 3.0f;
                 float cubeX = radius * std::cos(angle);
-                float cubeY = 2 * (row+.5);
+                float cubeY = 2 * (row + .5);
                 float cubeZ = radius * std::sin(angle);
-                cube_position_matrix = GetTranslationMatrix({cubeX, cubeY, cubeZ});
 
-                Matrix4x4 cubeProjectionMatrix = projectionMatrix*cube_position_matrix;
-
-                DrawCube(cubeProjectionMatrix);
+                initMenuCoordinatesArray_.push_back(GetTranslationMatrix({cubeX, cubeY, cubeZ}));
             }
         }
     }
 
+    // Draw the menu cubes, with the appropriate textures
+    void HelloCardboardApp::DrawInitMenu(Matrix4x4 projectionMatrix) {
+
+        for(int i_cube = 0; i_cube < nbMenuRows * nbMenuCubesPerRow; i_cube++) {
+            if(i_cube < initMenuCoordinatesArray_.size()) {
+                Matrix4x4 cubeProjectionMatrix = projectionMatrix * initMenuCoordinatesArray_.at(i_cube);
+                int i_tex = i_cube % 2;
+                DrawCube(cubeProjectionMatrix, i_tex);
+            }
+        }
+    }
 
     void HelloCardboardApp::DrawTarget() {
         glUseProgram(obj_program_);
@@ -518,13 +531,13 @@ namespace ndk_hello_cardboard {
     }
 
     void HelloCardboardApp::DrawCube(Matrix4x4 projection_matrix_) {
-        DrawCube(projection_matrix_, 0);
+        DrawCube(projection_matrix_, -1);
     }
 
     /**
      *
      * @param projection_matrix_
-     * @param texture_id if 0: texture is defined by the DrawCube function; other: index of texture in array
+     * @param texture_id if -1: texture is defined by the DrawCube function; other: index of texture in array
      */
     void HelloCardboardApp::DrawCube(Matrix4x4 projection_matrix_, int texture_id) {
         glUseProgram(obj_program_);
@@ -532,7 +545,7 @@ namespace ndk_hello_cardboard {
         std::array<float, 16> cube_array = projection_matrix_.ToGlArray();
         glUniformMatrix4fv(obj_modelview_projection_param_, 1, GL_FALSE,
                            cube_array.data());
-        if(texture_id==0) {
+        if(texture_id==-1) {
             if (IsPointingAtTarget(cube_position_matrix)) {
                 cube_tex_selected_.Bind();
             } else {
@@ -540,7 +553,13 @@ namespace ndk_hello_cardboard {
             }
         } else{
             // use the texture_id-th texture in the array
-//            TODO
+            if(texture_id < texture_array_.size()) {
+                texture_array_.at(texture_id).Bind();
+            }
+            else{
+                // Use the default texture
+                cube_tex_.Bind();
+            }
         }
         cube_.Draw();
 

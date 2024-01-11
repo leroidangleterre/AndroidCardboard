@@ -207,6 +207,7 @@ namespace ndk_hello_cardboard {
         Matrix4x4 roomProjectionMatrix_;
         Matrix4x4 cube_projection_matrix_;
 
+
         TexturedMesh room_;
         TexturedMesh cube_;
         Texture room_tex_;
@@ -218,6 +219,7 @@ namespace ndk_hello_cardboard {
         std::vector<Texture> target_object_selected_textures_;
         int cur_target_object_;
         std::vector<Texture> texture_array_;
+        std::vector<Matrix4x4> initMenuCoordinatesArray_; // All the cubes that are displayed in the init menu screen
 
         // Initial position of the player
         float viewer_position_x;
@@ -241,6 +243,10 @@ namespace ndk_hello_cardboard {
         void DrawWorld(Matrix4x4 projectionMatrix);
 
         void DrawInitMenu(Matrix4x4 projectionMatrix);
+
+        int nbMenuRows = 7;
+        int nbMenuCubesPerRow = 13;
+        void setupInitMenuCoordinates();
     };
 
 }  // namespace ndk_hello_cardboard
