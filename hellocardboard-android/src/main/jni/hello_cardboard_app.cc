@@ -290,15 +290,27 @@ namespace ndk_hello_cardboard {
         }
     }
     void HelloCardboardApp::OnTriggerEventController() {
+        LOGD("arthur Click on controller.");
 
     }
 
     void HelloCardboardApp::DefineHeadsetOrController() {
-        LOGD("arthur DefineHeadsetOrController");
-        // When the phone is set to be the headset, we may change the player's coordinates
-        //        viewer_position_x = -2.0f;
-        //        viewer_position_y = kDefaultFloorHeight;
-        //        viewer_position_z = -2.0f;
+
+        int rank = 0;
+        for(Matrix4x4 mat:initMenuCoordinatesArray_) {
+            if (IsPointingAtTarget(mat)) {
+                if(getInitMenuValue(rank) == 0){
+                    isHeadset = true;
+                    // When the phone is set to be the headset, we may change the player's coordinates
+                    viewer_position_x = -2.0f;
+                    viewer_position_y = kDefaultFloorHeight;
+                    viewer_position_z = -2.0f;
+                }else{
+                    isController = true;
+                }
+            }
+            rank++;
+        }
     }
 
     void HelloCardboardApp::OnPause() { CardboardHeadTracker_pause(head_tracker_); }
@@ -490,7 +502,7 @@ namespace ndk_hello_cardboard {
         for(int i_cube = 0; i_cube < nbMenuRows * nbMenuCubesPerRow; i_cube++) {
             if(i_cube < initMenuCoordinatesArray_.size()) {
                 Matrix4x4 cubeProjectionMatrix = projectionMatrix * initMenuCoordinatesArray_.at(i_cube);
-                int i_tex = i_cube % 2;
+                int i_tex = getInitMenuValue(i_cube);
                 DrawCube(cubeProjectionMatrix, i_tex);
             }
         }
@@ -658,5 +670,14 @@ namespace ndk_hello_cardboard {
         cubeVy = random(-v_max, v_max);
         cubeVz = random(-v_max, v_max);
 
+    }
+
+    /** Determines what menuItem is associated with a given cube of the init menu.
+     *
+     * @param cube_index the rank of the menu cube
+     * @return the menu index
+     */
+    int HelloCardboardApp::getInitMenuValue(int cube_index) {
+        return cube_index % 2;
     }
 }  // namespace ndk_hello_cardboard

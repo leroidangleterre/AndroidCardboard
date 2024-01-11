@@ -247,6 +247,8 @@ namespace ndk_hello_cardboard {
         int nbMenuRows = 7;
         int nbMenuCubesPerRow = 13;
         void setupInitMenuCoordinates();
+
+        int getInitMenuValue(int cube_index);
     };
 
 }  // namespace ndk_hello_cardboard
