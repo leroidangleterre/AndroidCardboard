@@ -107,6 +107,17 @@ namespace ndk_hello_cardboard {
         Cardboard_initializeAndroid(vm, obj);
         head_tracker_ = CardboardHeadTracker_create();
 
+        // A single cube moves across the room and must be caught by the player.
+        isCubeMoving = true;
+        cubeCurrentX = 0;
+        cubeCurrentY = 1;
+        cubeCurrentZ = 0;
+        roomWidth = 0;
+        roomHeight = 0;
+
+        // Initialize random number generator
+        srand(time(0));
+
         frame = 0;
     }
 
@@ -144,6 +155,8 @@ namespace ndk_hello_cardboard {
                 room_tex_.Initialize(env, java_asset_mgr_, "CubeRoom_BakedDiffuse.png"));
         HELLOCARDBOARD_CHECK(
                 cube_tex_.Initialize(env, java_asset_mgr_, "arthur_cube.png"));
+        HELLOCARDBOARD_CHECK(
+                cube_tex_selected_.Initialize(env, java_asset_mgr_, "arthur_cube_selected.png"));
         HELLOCARDBOARD_CHECK(target_object_meshes_[0].Initialize(
                 obj_position_param_, obj_uv_param_, "Icosahedron.obj", asset_mgr_));
         HELLOCARDBOARD_CHECK(target_object_not_selected_textures_[0].Initialize(
@@ -165,7 +178,9 @@ namespace ndk_hello_cardboard {
 
         // Target object first appears directly in front of user.
         target_position_matrix = GetTranslationMatrix({0.0f, 1.5f, -kMinTargetDistance});
-        cube_position_matrix = GetTranslationMatrix({0.0f, 0.0f, 0.0f});
+        cube_position_matrix = GetTranslationMatrix({0.0f, 1.5f, 0.0f});
+        roomWidth = 10;
+        roomHeight = 7;
 
         CHECKGLERROR("OnSurfaceCreated");
     }
@@ -186,7 +201,7 @@ namespace ndk_hello_cardboard {
 
         // Incorporate the floor height into the head_view
         head_view_ =
-                head_view_ * GetTranslationMatrix({0.0f, kDefaultFloorHeight, 0.0f});
+                head_view_ * GetTranslationMatrix({-2.0f, kDefaultFloorHeight, -2.0f});
 
         // Bind buffer
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
@@ -198,11 +213,18 @@ namespace ndk_hello_cardboard {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        float frame_float = (float)frame;
-//        float cubeCurrentX = frame_float/100;
-        float angle = frame_float/1000;
-//        cube_position_matrix = GetTranslationMatrix({cubeCurrentX, 0.0f, 0.0f});
-        cube_position_matrix = GetZRotationMatrix(angle);
+        float cubeCurrentX = 0;
+
+        // This part must be taken care of in a timer.
+        if (isCubeMoving) {
+
+            cubeCurrentX += cubeVx;
+            cubeCurrentY += cubeVy;
+            cubeCurrentZ += cubeVz;
+
+            boundSpeed();
+        }
+        cube_position_matrix = GetTranslationMatrix({cubeCurrentX, cubeCurrentY, cubeCurrentZ});
 
 
         // Draw eyes views
@@ -236,6 +258,9 @@ namespace ndk_hello_cardboard {
     void HelloCardboardApp::OnTriggerEvent() {
         if (IsPointingAtTarget()) {
             HideTarget();
+        }
+        if (IsPointingAtTarget(cube_position_matrix)) {
+            toggleCubeMovement();
         }
     }
 
@@ -434,11 +459,14 @@ namespace ndk_hello_cardboard {
     void HelloCardboardApp::DrawCube() {
         glUseProgram(obj_program_);
 
-        std::array<float, 16> room_array = modelview_projection_cube_.ToGlArray();
+        std::array<float, 16> cube_array = modelview_projection_cube_.ToGlArray();
         glUniformMatrix4fv(obj_modelview_projection_param_, 1, GL_FALSE,
-                           room_array.data());
-
-        cube_tex_.Bind();
+                           cube_array.data());
+        if (IsPointingAtTarget(cube_position_matrix)) {
+            cube_tex_selected_.Bind();
+        } else {
+            cube_tex_.Bind();
+        }
         cube_.Draw();
 
         CHECKGLERROR("DrawCube");
@@ -469,4 +497,72 @@ namespace ndk_hello_cardboard {
         return angle < kAngleLimit;
     }
 
+
+    bool HelloCardboardApp::IsPointingAtTarget(Matrix4x4 param) {
+        // Compute vectors pointing towards the reticle and towards the target object
+        // in head space.
+        Matrix4x4 head_from_target = head_view_ * param;
+
+        const std::array<float, 4> unit_quaternion = {0.f, 0.f, 0.f, 1.f};
+        const std::array<float, 4> point_vector = {0.f, 0.f, -1.f, 0.f};
+        const std::array<float, 4> target_vector = head_from_target * unit_quaternion;
+
+        float angle = AngleBetweenVectors(point_vector, target_vector);
+        return angle < kAngleLimit;
+    }
+
+    // When the cube is at the borders, flip the speed;
+    void HelloCardboardApp::boundSpeed() {
+        float margin = 0.2;
+
+        if (cubeCurrentY < -0 && cubeVy < 0) {
+            cubeCurrentY = margin;
+            cubeVy = -cubeVy;
+        }
+        if (cubeCurrentY > roomHeight && cubeVy > 0) {
+            cubeCurrentY = roomHeight - margin;
+            cubeVy = -cubeVy;
+        }
+
+        if (cubeCurrentX < -roomWidth / 2 && cubeVy < 0) {
+            cubeCurrentX = -roomWidth / 2 + margin;
+            cubeVx = -cubeVx;
+        }
+        if (cubeCurrentX > roomWidth / 2 && cubeVx > 0) {
+            cubeCurrentX = roomWidth / 2 - margin;
+            cubeVx = -cubeVx;
+        }
+
+        if (cubeCurrentZ < -roomWidth / 2 && cubeVz < 0) {
+            cubeCurrentZ = -roomWidth / 2 + margin;
+            cubeVz = -cubeVz;
+        }
+        if (cubeCurrentZ > roomWidth / 2 && cubeVz > 0) {
+            cubeCurrentZ = roomWidth / 2 - margin;
+            cubeVz = -cubeVz;
+        }
+    }
+
+    void HelloCardboardApp::toggleCubeMovement() {
+        isCubeMoving = !isCubeMoving;
+        if (isCubeMoving) {
+            // Compute random speed
+            computeRandomSpeed();
+        }
+    }
+
+    float random(float a, float b) {
+        int random_int = rand();
+        float res_01 = (float) random_int / RAND_MAX;
+        float res_ab = res_01 * (b - a) + a;
+        return res_ab;
+    }
+
+    void HelloCardboardApp::computeRandomSpeed() {
+        float v_max = 0.05;
+        cubeVx = random(-v_max, v_max);
+        cubeVy = random(-v_max, v_max);
+        cubeVz = random(-v_max, v_max);
+
+    }
 }  // namespace ndk_hello_cardboard

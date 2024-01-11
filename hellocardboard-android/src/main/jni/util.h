@@ -83,6 +83,24 @@ namespace ndk_hello_cardboard {
     Matrix4x4 GetTranslationMatrix(const std::array<float, 3>& translation);
 
 /**
+ * Construct a Rotation matrix, just around the X-axis.
+ *
+ * @param translation Translation array
+ * @return Obtained matrix
+ */
+
+    Matrix4x4 GetXRotationMatrix(const float& angle);
+
+/**
+ * Construct a Rotation matrix, just around the Y-axis.
+ *
+ * @param translation Translation array
+ * @return Obtained matrix
+ */
+
+    Matrix4x4 GetYRotationMatrix(const float& angle);
+
+/**
  * Construct a Rotation matrix, just around the Z-axis.
  *
  * @param translation Translation array
