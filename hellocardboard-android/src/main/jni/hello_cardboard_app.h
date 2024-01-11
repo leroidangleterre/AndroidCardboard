@@ -143,6 +143,8 @@ namespace ndk_hello_cardboard {
          * Draws the cube
          */
         void DrawCube();
+        void DrawCube(Matrix4x4 projection_matrix_);
+        void DrawCube(Matrix4x4 projection_matrix_, int texture_id);
 
         /**
          * Finds a new random position for the target object.
@@ -166,6 +168,9 @@ namespace ndk_hello_cardboard {
         float cubeVz;
         float roomWidth;
         float roomHeight;
+
+        bool isHeadset;
+        bool isController;
 
         jobject java_asset_mgr_;
         AAssetManager* asset_mgr_;
@@ -198,9 +203,9 @@ namespace ndk_hello_cardboard {
         Matrix4x4 target_position_matrix;
         Matrix4x4 cube_position_matrix;
 
-        Matrix4x4 modelview_projection_target_;
-        Matrix4x4 modelview_projection_room_;
-        Matrix4x4 modelview_projection_cube_;
+        Matrix4x4 target_projection_matrix_;
+        Matrix4x4 roomProjectionMatrix_;
+        Matrix4x4 cube_projection_matrix_;
 
         TexturedMesh room_;
         TexturedMesh cube_;
@@ -212,13 +217,30 @@ namespace ndk_hello_cardboard {
         std::vector<Texture> target_object_not_selected_textures_;
         std::vector<Texture> target_object_selected_textures_;
         int cur_target_object_;
+        std::vector<Texture> texture_array_;
+
+        // Initial position of the player
+        float viewer_position_x;
+        float viewer_position_y;
+        float viewer_position_z;
 
         bool isCubeMoving;
         void toggleCubeMovement();
+        float random(float a, float b);
 
         void computeRandomSpeed();
 
         void boundSpeed();
+
+        void OnTriggerEventHeadset();
+
+        void OnTriggerEventController();
+
+        void DefineHeadsetOrController();
+
+        void DrawWorld(Matrix4x4 projectionMatrix);
+
+        void DrawInitMenu(Matrix4x4 projectionMatrix);
     };
 
 }  // namespace ndk_hello_cardboard
