@@ -25,6 +25,8 @@
 #include <fstream>
 
 #include "cardboard.h"
+#include <math.h>
+#include <android/log.h>
 
 namespace ndk_hello_cardboard {
 
@@ -98,7 +100,9 @@ namespace ndk_hello_cardboard {
               target_object_meshes_(kTargetMeshCount),
               target_object_not_selected_textures_(kTargetMeshCount),
               target_object_selected_textures_(kTargetMeshCount),
-              cur_target_object_(RandomUniformInt(kTargetMeshCount)) {
+              cur_target_object_(RandomUniformInt(kTargetMeshCount)),
+              initMenuCoordinatesArray_(0),
+              texture_array_(10){
         JNIEnv* env;
         vm->GetEnv((void**)&env, JNI_VERSION_1_6);
         java_asset_mgr_ = env->NewGlobalRef(asset_mgr_obj);
@@ -119,6 +123,15 @@ namespace ndk_hello_cardboard {
         srand(time(0));
 
         frame = 0;
+
+        isHeadset = false;
+        isController = false;
+
+        viewer_position_x = 0;
+        viewer_position_y = -1;
+        viewer_position_z = 0;
+
+        setupInitMenuCoordinates();
     }
 
     HelloCardboardApp::~HelloCardboardApp() {
@@ -176,6 +189,11 @@ namespace ndk_hello_cardboard {
         HELLOCARDBOARD_CHECK(target_object_selected_textures_[2].Initialize(
                 env, java_asset_mgr_, "TriSphere_Pink_BakedDiffuse.png"));
 
+        HELLOCARDBOARD_CHECK(texture_array_[0].Initialize(
+                env, java_asset_mgr_, "menu_headset.png"));
+        HELLOCARDBOARD_CHECK(texture_array_[1].Initialize(
+                env, java_asset_mgr_, "menu_controller.png"));
+
         // Target object first appears directly in front of user.
         target_position_matrix = GetTranslationMatrix({0.0f, 1.5f, -kMinTargetDistance});
         cube_position_matrix = GetTranslationMatrix({0.0f, 1.5f, 0.0f});
@@ -200,8 +218,7 @@ namespace ndk_hello_cardboard {
         head_view_ = GetPose();
 
         // Incorporate the floor height into the head_view
-        head_view_ =
-                head_view_ * GetTranslationMatrix({-2.0f, kDefaultFloorHeight, -2.0f});
+        head_view_ = head_view_ * GetTranslationMatrix({viewer_position_x, viewer_position_y, viewer_position_z});
 
         // Bind buffer
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
@@ -237,13 +254,12 @@ namespace ndk_hello_cardboard {
 
             Matrix4x4 eye_projection_matrix = GetMatrixFromGlArray(projection_matrices_[eye]);
             Matrix4x4 modelview_target = eye_view * target_position_matrix;
-            Matrix4x4 modelview_cube = eye_view * cube_position_matrix;
-            modelview_projection_target_ = eye_projection_matrix * modelview_target;
-            modelview_projection_room_ = eye_projection_matrix * eye_view;
-            modelview_projection_cube_ = eye_projection_matrix * modelview_cube;
+            target_projection_matrix_ = eye_projection_matrix * modelview_target;
+            roomProjectionMatrix_ = eye_projection_matrix * eye_view;
+            cube_projection_matrix_ = eye_projection_matrix * eye_view * cube_position_matrix;
 
             // Draw room and target
-            DrawWorld();
+            DrawWorld(eye_projection_matrix * eye_view);
         }
 
         // Render
@@ -256,11 +272,44 @@ namespace ndk_hello_cardboard {
     }
 
     void HelloCardboardApp::OnTriggerEvent() {
+        if (isHeadset) {
+            OnTriggerEventHeadset();
+        } else if (isController) {
+            OnTriggerEventController();
+        } else {
+            DefineHeadsetOrController();
+        }
+    }
+
+    void HelloCardboardApp::OnTriggerEventHeadset() {
         if (IsPointingAtTarget()) {
             HideTarget();
         }
         if (IsPointingAtTarget(cube_position_matrix)) {
             toggleCubeMovement();
+        }
+    }
+    void HelloCardboardApp::OnTriggerEventController() {
+        LOGD("arthur Click on controller.");
+
+    }
+
+    void HelloCardboardApp::DefineHeadsetOrController() {
+
+        int rank = 0;
+        for(Matrix4x4 mat:initMenuCoordinatesArray_) {
+            if (IsPointingAtTarget(mat)) {
+                if(getInitMenuValue(rank) == 0){
+                    isHeadset = true;
+                    // When the phone is set to be the headset, we may change the player's coordinates
+                    viewer_position_x = -2.0f;
+                    viewer_position_y = kDefaultFloorHeight;
+                    viewer_position_z = -2.0f;
+                }else{
+                    isController = true;
+                }
+            }
+            rank++;
         }
     }
 
@@ -416,20 +465,53 @@ namespace ndk_hello_cardboard {
                Quatf::FromXYZW(&out_orientation[0]).ToMatrix();
     }
 
-    void HelloCardboardApp::DrawWorld() {
+    void HelloCardboardApp::DrawWorld(Matrix4x4 projectionMatrix) {
         frame++;
-        std::string text="arthur: frame "+std::to_string(frame);
-        LOGE("%s", text.c_str());
-        LOGE("coucou");
-        DrawRoom();
-        DrawCube();
-        DrawTarget();
+
+        if (isHeadset) {
+            DrawRoom();
+            DrawCube();
+            DrawTarget();
+        } else if (isController) {
+            // Draw the controller as a 2D image
+        } else {
+            // Draw the init menu
+            DrawInitMenu(projectionMatrix);
+        }
+    }
+
+    void HelloCardboardApp::setupInitMenuCoordinates(){
+
+        for(int row= -nbMenuRows / 2; row < nbMenuRows / 2; row++) {
+
+            for (int rank = 0; rank < nbMenuCubesPerRow; rank++) {
+                double angle = rank * 2 * M_PI / nbMenuCubesPerRow;
+                double radius = 3.0f;
+                float cubeX = radius * std::cos(angle);
+                float cubeY = 2 * (row + .5);
+                float cubeZ = radius * std::sin(angle);
+
+                initMenuCoordinatesArray_.push_back(GetTranslationMatrix({cubeX, cubeY, cubeZ}));
+            }
+        }
+    }
+
+    // Draw the menu cubes, with the appropriate textures
+    void HelloCardboardApp::DrawInitMenu(Matrix4x4 projectionMatrix) {
+
+        for(int i_cube = 0; i_cube < nbMenuRows * nbMenuCubesPerRow; i_cube++) {
+            if(i_cube < initMenuCoordinatesArray_.size()) {
+                Matrix4x4 cubeProjectionMatrix = projectionMatrix * initMenuCoordinatesArray_.at(i_cube);
+                int i_tex = getInitMenuValue(i_cube);
+                DrawCube(cubeProjectionMatrix, i_tex);
+            }
+        }
     }
 
     void HelloCardboardApp::DrawTarget() {
         glUseProgram(obj_program_);
 
-        std::array<float, 16> target_array = modelview_projection_target_.ToGlArray();
+        std::array<float, 16> target_array = target_projection_matrix_.ToGlArray();
         glUniformMatrix4fv(obj_modelview_projection_param_, 1, GL_FALSE,
                            target_array.data());
 
@@ -446,7 +528,7 @@ namespace ndk_hello_cardboard {
     void HelloCardboardApp::DrawRoom() {
         glUseProgram(obj_program_);
 
-        std::array<float, 16> room_array = modelview_projection_room_.ToGlArray();
+        std::array<float, 16> room_array = roomProjectionMatrix_.ToGlArray();
         glUniformMatrix4fv(obj_modelview_projection_param_, 1, GL_FALSE,
                            room_array.data());
 
@@ -457,15 +539,39 @@ namespace ndk_hello_cardboard {
     }
 
     void HelloCardboardApp::DrawCube() {
+        DrawCube(cube_projection_matrix_);
+    }
+
+    void HelloCardboardApp::DrawCube(Matrix4x4 projection_matrix_) {
+        DrawCube(projection_matrix_, -1);
+    }
+
+    /**
+     *
+     * @param projection_matrix_
+     * @param texture_id if -1: texture is defined by the DrawCube function; other: index of texture in array
+     */
+    void HelloCardboardApp::DrawCube(Matrix4x4 projection_matrix_, int texture_id) {
         glUseProgram(obj_program_);
 
-        std::array<float, 16> cube_array = modelview_projection_cube_.ToGlArray();
+        std::array<float, 16> cube_array = projection_matrix_.ToGlArray();
         glUniformMatrix4fv(obj_modelview_projection_param_, 1, GL_FALSE,
                            cube_array.data());
-        if (IsPointingAtTarget(cube_position_matrix)) {
-            cube_tex_selected_.Bind();
-        } else {
-            cube_tex_.Bind();
+        if(texture_id==-1) {
+            if (IsPointingAtTarget(cube_position_matrix)) {
+                cube_tex_selected_.Bind();
+            } else {
+                cube_tex_.Bind();
+            }
+        } else{
+            // use the texture_id-th texture in the array
+            if(texture_id < texture_array_.size()) {
+                texture_array_.at(texture_id).Bind();
+            }
+            else{
+                // Use the default texture
+                cube_tex_.Bind();
+            }
         }
         cube_.Draw();
 
@@ -551,7 +657,7 @@ namespace ndk_hello_cardboard {
         }
     }
 
-    float random(float a, float b) {
+    float HelloCardboardApp::random(float a, float b) {
         int random_int = rand();
         float res_01 = (float) random_int / RAND_MAX;
         float res_ab = res_01 * (b - a) + a;
@@ -564,5 +670,14 @@ namespace ndk_hello_cardboard {
         cubeVy = random(-v_max, v_max);
         cubeVz = random(-v_max, v_max);
 
+    }
+
+    /** Determines what menuItem is associated with a given cube of the init menu.
+     *
+     * @param cube_index the rank of the menu cube
+     * @return the menu index
+     */
+    int HelloCardboardApp::getInitMenuValue(int cube_index) {
+        return cube_index % 2;
     }
 }  // namespace ndk_hello_cardboard
