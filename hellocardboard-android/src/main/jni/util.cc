@@ -529,7 +529,6 @@ namespace ndk_hello_cardboard {
             LOGE("arthur load cube KO");
             return false;
         }
-        LOGE("arthur load cube OK");
         return true;
     }
 
@@ -565,7 +564,6 @@ namespace ndk_hello_cardboard {
             return false;
         }
         glGenerateMipmap(GL_TEXTURE_2D);
-        LOGE("arthur texture load ok %s", texture_path.c_str());
         return true;
     }
 
@@ -573,7 +571,6 @@ namespace ndk_hello_cardboard {
         HELLOCARDBOARD_CHECK(texture_id_ != 0);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, texture_id_);
-//    LOGE("arthur: Texture::Bind(), texture_id_ is %d", texture_id_);
     }
 
 }  // namespace ndk_hello_cardboard

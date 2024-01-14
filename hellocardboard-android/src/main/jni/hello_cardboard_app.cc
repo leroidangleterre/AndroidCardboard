@@ -27,6 +27,21 @@
 #include "cardboard.h"
 #include <math.h>
 #include <android/log.h>
+#include <sys/socket.h>
+#include <errno.h>
+
+# include <stdio.h>
+# include <stdlib.h>
+# include <errno.h>
+# include <string.h>
+# include <netdb.h>
+# include <sys/types.h>
+# include <netinet/in.h>
+# include <sys/socket.h>
+# include <sys/un.h>
+# include <unistd.h>
+
+#define MESSAGE_LENGTH 100
 
 namespace ndk_hello_cardboard {
 
@@ -79,6 +94,12 @@ namespace ndk_hello_cardboard {
 
         int frame;
 
+        int messageNumber;
+        int communicationSocket; // Used to communicate from Controller to Headset
+
+        const char *hostname = "192.168.0.40";
+        int portNumber = 6868;
+
     }  // anonymous namespace
 
     HelloCardboardApp::HelloCardboardApp(JavaVM* vm, jobject obj,
@@ -103,6 +124,9 @@ namespace ndk_hello_cardboard {
               cur_target_object_(RandomUniformInt(kTargetMeshCount)),
               initMenuCoordinatesArray_(0),
               texture_array_(10){
+
+        __android_log_print(ANDROID_LOG_VERBOSE, "arthur_3d", "arthur HelloCardboardApp start %d", 0);
+
         JNIEnv* env;
         vm->GetEnv((void**)&env, JNI_VERSION_1_6);
         java_asset_mgr_ = env->NewGlobalRef(asset_mgr_obj);
@@ -123,6 +147,7 @@ namespace ndk_hello_cardboard {
         srand(time(0));
 
         frame = 0;
+        messageNumber = 0;
 
         isHeadset = false;
         isController = false;
@@ -210,68 +235,86 @@ namespace ndk_hello_cardboard {
     }
 
     void HelloCardboardApp::OnDrawFrame() {
-        if (!UpdateDeviceParams()) {
-            return;
+        if(isController) {
+            // Used only for the controller
+            OnDrawFrameController();
         }
+        else{
+            // Used both for headset and before selection
+            OnDrawFrameHeadset();
+        }
+    }
 
-        // Update Head Pose.
-        head_view_ = GetPose();
+    void HelloCardboardApp::OnDrawFrameController() {
 
-        // Incorporate the floor height into the head_view
-        head_view_ = head_view_ * GetTranslationMatrix({viewer_position_x, viewer_position_y, viewer_position_z});
-
-        // Bind buffer
-        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
-
-        glEnable(GL_DEPTH_TEST);
-        glEnable(GL_CULL_FACE);
-        glDisable(GL_SCISSOR_TEST);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClearColor(0,0,255,255);
 
-        float cubeCurrentX = 0;
+    }
 
-        // This part must be taken care of in a timer.
-        if (isCubeMoving) {
+    void HelloCardboardApp::OnDrawFrameHeadset() {
+        if (UpdateDeviceParams()) {
 
-            cubeCurrentX += cubeVx;
-            cubeCurrentY += cubeVy;
-            cubeCurrentZ += cubeVz;
+            // Update Head Pose.
+            head_view_ = GetPose();
 
-            boundSpeed();
+            // Incorporate the floor height into the head_view
+            head_view_ = head_view_ * GetTranslationMatrix({viewer_position_x, viewer_position_y, viewer_position_z});
+
+            // Bind buffer
+            glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
+
+            glEnable(GL_DEPTH_TEST);
+            glEnable(GL_CULL_FACE);
+            glDisable(GL_SCISSOR_TEST);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            float cubeCurrentX = 0;
+
+            // This part must be taken care of in a timer.
+            if (isCubeMoving) {
+
+                cubeCurrentX += cubeVx;
+                cubeCurrentY += cubeVy;
+                cubeCurrentZ += cubeVz;
+
+                boundSpeed();
+            }
+            cube_position_matrix = GetTranslationMatrix({cubeCurrentX, cubeCurrentY, cubeCurrentZ});
+
+
+            // Draw eyes views
+            for (int eye = 0; eye < 2; ++eye) {
+                glViewport(eye == kLeft ? 0 : screen_width_ / 2, 0, screen_width_ / 2,
+                           screen_height_);
+
+                Matrix4x4 eye_matrix = GetMatrixFromGlArray(eye_matrices_[eye]);
+                Matrix4x4 eye_view = eye_matrix * head_view_;
+
+                Matrix4x4 eye_projection_matrix = GetMatrixFromGlArray(projection_matrices_[eye]);
+                Matrix4x4 modelview_target = eye_view * target_position_matrix;
+                target_projection_matrix_ = eye_projection_matrix * modelview_target;
+                roomProjectionMatrix_ = eye_projection_matrix * eye_view;
+                cube_projection_matrix_ = eye_projection_matrix * eye_view * cube_position_matrix;
+
+                // Draw room and target
+                DrawWorld(eye_projection_matrix * eye_view);
+            }
+
+            // Render
+            CardboardDistortionRenderer_renderEyeToDisplay(
+                    distortion_renderer_, /* target_display = */ 0, /* x = */ 0, /* y = */ 0,
+                    screen_width_, screen_height_, &left_eye_texture_description_,
+                    &right_eye_texture_description_);
+
+            CHECKGLERROR("onDrawFrame");
         }
-        cube_position_matrix = GetTranslationMatrix({cubeCurrentX, cubeCurrentY, cubeCurrentZ});
-
-
-        // Draw eyes views
-        for (int eye = 0; eye < 2; ++eye) {
-            glViewport(eye == kLeft ? 0 : screen_width_ / 2, 0, screen_width_ / 2,
-                       screen_height_);
-
-            Matrix4x4 eye_matrix = GetMatrixFromGlArray(eye_matrices_[eye]);
-            Matrix4x4 eye_view = eye_matrix * head_view_;
-
-            Matrix4x4 eye_projection_matrix = GetMatrixFromGlArray(projection_matrices_[eye]);
-            Matrix4x4 modelview_target = eye_view * target_position_matrix;
-            target_projection_matrix_ = eye_projection_matrix * modelview_target;
-            roomProjectionMatrix_ = eye_projection_matrix * eye_view;
-            cube_projection_matrix_ = eye_projection_matrix * eye_view * cube_position_matrix;
-
-            // Draw room and target
-            DrawWorld(eye_projection_matrix * eye_view);
-        }
-
-        // Render
-        CardboardDistortionRenderer_renderEyeToDisplay(
-                distortion_renderer_, /* target_display = */ 0, /* x = */ 0, /* y = */ 0,
-                screen_width_, screen_height_, &left_eye_texture_description_,
-                &right_eye_texture_description_);
-
-        CHECKGLERROR("onDrawFrame");
     }
 
     void HelloCardboardApp::OnTriggerEvent() {
+        LOGD("arthur on trigger");
         if (isHeadset) {
             OnTriggerEventHeadset();
         } else if (isController) {
@@ -290,11 +333,45 @@ namespace ndk_hello_cardboard {
         }
     }
     void HelloCardboardApp::OnTriggerEventController() {
-        LOGD("arthur Click on controller.");
 
+        int n;
+
+        LOGD("arthur trigger event on controller, sending message number %d", messageNumber);
+
+        char message[] = "coucou   "; // Cannot be longer that messageLength
+        message[8] = messageNumber % 10 + '0';
+        LOGD("arthur controller sending message <%s>", message);
+
+        char buffer[MESSAGE_LENGTH] = "";
+
+
+        std::fill(std::begin(buffer), std::end(buffer), '\0');
+        strcpy(buffer, message);
+        n = write(communicationSocket, buffer, MESSAGE_LENGTH);
+        if (n < 0) {
+            LOGD("arthur n<0");
+        } else {
+            LOGD("arthur n>=0");
+        }
+        LOGD("arthur after sending message");
+        if(messageNumber>=10){
+            LOGD("arthur closing controller app");
+            closeSockets();
+            // Closing program.
+            exit(0);
+        }else{
+            messageNumber++;
+        }
+    }
+
+    void HelloCardboardApp::closeSockets(){
+        LOGD("arthur closing socket...");
+        close(communicationSocket);
+        LOGD("arthur socket closed");
     }
 
     void HelloCardboardApp::DefineHeadsetOrController() {
+        LOGD("arthur define headset or controller");
 
         int rank = 0;
         for(Matrix4x4 mat:initMenuCoordinatesArray_) {
@@ -305,8 +382,14 @@ namespace ndk_hello_cardboard {
                     viewer_position_x = -2.0f;
                     viewer_position_y = kDefaultFloorHeight;
                     viewer_position_z = -2.0f;
+                    LOGD("arthur setting up HEADSET");
+                    setupServer();
+                    LOGD("arthur setting up HEADSET DONE");
                 }else{
                     isController = true;
+                    LOGD("arthur setting up HEADSET");
+                    setupServer();
+                    LOGD("arthur setting up client DONE");
                 }
             }
             rank++;
@@ -473,7 +556,7 @@ namespace ndk_hello_cardboard {
             DrawCube();
             DrawTarget();
         } else if (isController) {
-            // Draw the controller as a 2D image
+            // Draw buttons on the controller screen; the virtual controller will be drawn in the headset.
         } else {
             // Draw the init menu
             DrawInitMenu(projectionMatrix);
@@ -679,5 +762,65 @@ namespace ndk_hello_cardboard {
      */
     int HelloCardboardApp::getInitMenuValue(int cube_index) {
         return cube_index % 2;
+    }
+
+    /** Setup the socket that allows the controller to talk to the headset.
+     *
+     */
+    void HelloCardboardApp::setupServer() {
+        if(isHeadset){
+            setupServerForHeadset();
+        }else if(isController) {
+            setupServerForController();
+        }
+    }
+
+    /** The headset is the server-side of the TCP communication.
+     *
+     */
+    void HelloCardboardApp::setupServerForHeadset() const {
+        communicationSocket = socket(AF_INET, SOCK_STREAM, 0);
+        if (communicationSocket < 0) {
+            __android_log_print(ANDROID_LOG_VERBOSE, "arthur_3d", "arthur error is %f", strerror(errno));
+        }else{
+            __android_log_print(ANDROID_LOG_VERBOSE, "arthur_3d", "arthur socket opened %d", communicationSocket);
+        }
+    }
+
+    /** The controller is the client-side of the TCP communication.
+     *
+     */
+    void HelloCardboardApp::setupServerForController() const {
+        LOGD("arthur setting up client isController");
+
+
+        struct hostent *server;
+        struct sockaddr_in serv_addr;
+
+        communicationSocket = socket(AF_INET, SOCK_STREAM, 0);
+        if (communicationSocket < 0) {
+            LOGD("arthur ERROR opening socket");
+        }
+        LOGD("arthur after socket creation");
+        server = gethostbyname(hostname);
+        LOGD("arthur after gethostbyname: server is %s", server);
+        if (server == NULL) {
+            LOGD("arthur gethostbyname: server is NULL");
+            fprintf(stderr, "ERROR, no such host\n");
+            exit(0);
+        }
+        LOGD("arthur gethostbyname: server is not NULL");
+        bzero((char *) &serv_addr, sizeof(serv_addr));
+        serv_addr.sin_family = AF_INET;
+        bcopy((char *) server->h_addr,
+              (char *) &serv_addr.sin_addr.s_addr,
+              server->h_length);
+        serv_addr.sin_port = htons(portNumber);
+        LOGD("ARTHUR testing connect...");
+        if (connect(communicationSocket, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
+            LOGD("arthur connecting PAS OK");
+        } else {
+            LOGD("arthur connecting OK");
+        }
     }
 }  // namespace ndk_hello_cardboard

@@ -125,11 +125,6 @@ namespace ndk_hello_cardboard {
         Matrix4x4 GetPose();
 
         /**
-         * Draws all world-space objects for the given eye.
-         */
-        void DrawWorld();
-
-        /**
          * Draws the target object.
          */
         void DrawTarget();
@@ -249,6 +244,18 @@ namespace ndk_hello_cardboard {
         void setupInitMenuCoordinates();
 
         int getInitMenuValue(int cube_index);
+
+        void setupServer();
+
+        void OnDrawFrameHeadset();
+
+        void OnDrawFrameController();
+
+        void closeSockets();
+
+        void setupServerForController() const;
+
+        void setupServerForHeadset() const;
     };
 
 }  // namespace ndk_hello_cardboard
