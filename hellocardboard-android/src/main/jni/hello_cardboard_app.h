@@ -256,6 +256,12 @@ namespace ndk_hello_cardboard {
         void setupServerForController() const;
 
         void setupServerForHeadset() const;
+
+        void sendMessageToHeadset() const;
+
+        void sendMessageToHeadset(char *message) const;
+
+        ssize_t readFromClient(int new_socket, char *buffer) const;
     };
 
 }  // namespace ndk_hello_cardboard

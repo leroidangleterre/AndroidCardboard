@@ -41,7 +41,7 @@
 # include <sys/un.h>
 # include <unistd.h>
 
-#define MESSAGE_LENGTH 100
+#define MESSAGE_LENGTH 300
 
 namespace ndk_hello_cardboard {
 
@@ -92,13 +92,13 @@ namespace ndk_hello_cardboard {
       gl_FragColor = texture2D(u_Texture, vec2(v_UV.x, 1.0 - v_UV.y));
     })glsl";
 
-        int frame;
+        int currentFrame;
 
         int messageNumber;
         int communicationSocket; // Used to communicate from Controller to Headset
 
-        const char *hostname = "192.168.0.40";
-        int portNumber = 6868;
+        const char *hostname = "192.168.1.39";
+        int portNumber = 8080;
 
     }  // anonymous namespace
 
@@ -146,7 +146,7 @@ namespace ndk_hello_cardboard {
         // Initialize random number generator
         srand(time(0));
 
-        frame = 0;
+        currentFrame = 0;
         messageNumber = 0;
 
         isHeadset = false;
@@ -250,6 +250,26 @@ namespace ndk_hello_cardboard {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glClearColor(0,0,255,255);
 
+        // Update Head Pose.
+        head_view_ = GetPose();
+//
+
+//        char message[] = "coucou   "; // Cannot be longer that messageLength
+//        message[9] = messageNumber % 10 + '0';
+//
+        if(1000*(messageNumber/1000) == messageNumber) {
+//        sendMessageToHeadset(message);
+//        // Send the controller's matrix to the headset
+            std::string textMatrix4x4 = head_view_.toString();
+            char *message = new char[textMatrix4x4.length() + 1];
+
+            strcpy(message, textMatrix4x4.c_str());
+//        LOGD("arthur Controller sending matrix to headset: %s", message);
+//        LOGD("arthur size of message sent: %d", strlen(message));
+//        sendMessageToHeadset(message);
+        }
+
+//        LOGD("arthur OnDrawFrameController DONE");
     }
 
     void HelloCardboardApp::OnDrawFrameHeadset() {
@@ -334,16 +354,18 @@ namespace ndk_hello_cardboard {
     }
     void HelloCardboardApp::OnTriggerEventController() {
 
-        int n;
-
         LOGD("arthur trigger event on controller, sending message number %d", messageNumber);
 
         char message[] = "coucou   "; // Cannot be longer that messageLength
         message[8] = messageNumber % 10 + '0';
-        LOGD("arthur controller sending message <%s>", message);
+        sendMessageToHeadset(message);
+        messageNumber++;
+    }
+
+    void HelloCardboardApp::sendMessageToHeadset(char message[]) const {
+        int n;
 
         char buffer[MESSAGE_LENGTH] = "";
-
 
         std::fill(std::begin(buffer), std::end(buffer), '\0');
         strcpy(buffer, message);
@@ -354,14 +376,6 @@ namespace ndk_hello_cardboard {
             LOGD("arthur n>=0");
         }
         LOGD("arthur after sending message");
-        if(messageNumber>=10){
-            LOGD("arthur closing controller app");
-            closeSockets();
-            // Closing program.
-            exit(0);
-        }else{
-            messageNumber++;
-        }
     }
 
     void HelloCardboardApp::closeSockets(){
@@ -549,7 +563,7 @@ namespace ndk_hello_cardboard {
     }
 
     void HelloCardboardApp::DrawWorld(Matrix4x4 projectionMatrix) {
-        frame++;
+        currentFrame++;
 
         if (isHeadset) {
             DrawRoom();
@@ -779,12 +793,34 @@ namespace ndk_hello_cardboard {
      *
      */
     void HelloCardboardApp::setupServerForHeadset() const {
-        communicationSocket = socket(AF_INET, SOCK_STREAM, 0);
-        if (communicationSocket < 0) {
-            __android_log_print(ANDROID_LOG_VERBOSE, "arthur_3d", "arthur error is %f", strerror(errno));
-        }else{
-            __android_log_print(ANDROID_LOG_VERBOSE, "arthur_3d", "arthur socket opened %d", communicationSocket);
-        }
+        int server_fd, new_socket;
+        struct sockaddr_in address;
+        int opt = 1;
+        ssize_t valread;
+
+        socklen_t addrlen = sizeof(address);
+
+        char buffer[1024] = { 0 };
+
+        server_fd = socket(AF_INET, SOCK_STREAM, 0);
+        setsockopt(server_fd, SOL_SOCKET,
+                   SO_REUSEADDR | SO_REUSEPORT, &opt,
+                   sizeof(opt));
+        LOGD("arthur setsockopt DONE");
+        address.sin_family = AF_INET;
+        address.sin_addr.s_addr = INADDR_ANY;
+        address.sin_port = htons(portNumber);
+
+
+        bind(server_fd, (struct sockaddr*)&address, sizeof(address));  // result must be >= 0
+        LOGD("arthur bind DONE");
+        listen(server_fd, 3); // result must be >= 0
+        LOGD("arthur listening...");
+
+        new_socket = accept(server_fd, (struct sockaddr*)&address, &addrlen);
+        LOGD("arthur new socket created");
+
+        LOGD("arthur end transmission from controller");
     }
 
     /** The controller is the client-side of the TCP communication.
