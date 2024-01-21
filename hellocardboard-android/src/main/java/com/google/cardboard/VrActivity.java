@@ -44,10 +44,8 @@ import java.util.Enumeration;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-import ndk_hello_cardboard.R;
 
 /**
  * A Google Cardboard VR NDK sample application.
@@ -250,7 +248,7 @@ public class VrActivity extends AppCompatActivity implements PopupMenu.OnMenuIte
      */
     @Override
     public void onRequestPermissionsResult(
-            int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+            int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (!isReadExternalStorageEnabled()) {
             Toast.makeText(this, R.string.read_storage_permission, Toast.LENGTH_LONG).show();

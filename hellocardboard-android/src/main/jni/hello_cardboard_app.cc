@@ -115,6 +115,9 @@ namespace ndk_hello_cardboard {
 
         class ThreadWorker{
         public:
+
+            bool keepLooping;
+
             void functionInThread(ThreadData * newData, int socket_fd){
                 LOGD("arthur functionInThread()");
 
@@ -130,9 +133,58 @@ namespace ndk_hello_cardboard {
                 int server_fd;
                 struct sockaddr_in client_addr;
                 socklen_t client_size = sizeof(client_addr);
-                LOGD("arthur accepting connection");
+//                LOGD("arthur waiting for connection");
                 int new_socket = accept(socket_fd, (struct sockaddr*)&client_addr, &client_size);
                 LOGD("arthur accepted connection.");
+
+                keepLooping = true;
+                do{
+                    vector<char> buffer(5000);
+                    int bytes = 0;
+//                    LOGD("arthur before recv loop");
+                    do {
+                        bytes = recv(new_socket, buffer.data(), buffer.size(), 0);
+                    }while(bytes <= 0);
+//                    LOGD("arthur after recv loop");
+                    string message(buffer.begin(), buffer.end());
+                    processClientMessage(message);
+//                    LOGD("arthur received <%s>", message.c_str());
+                }while(keepLooping);
+                LOGD("arthur THREAD END");
+            }
+
+            /** Process the messages received from the client.
+             *
+             * @param recv_client_msg the message may start with "MOVECUBE", "QUIT", "MATRIX"
+             * "MOVECUBE dx dy dz"
+             * "QUIT"
+             * "MATRIX numerical values of the client's 3d location"
+             */
+            void processClientMessage(string message){ //, ThreadData &data){
+                LOGD("arthur received from client: <%s>", message.c_str());
+                if(HelloCardboardApp::startswith(message, "MOVE")){
+
+                    string message_copy = message;
+                    string delimiter = " ";
+
+                    vector<string> result = HelloCardboardApp::string_split(message_copy, delimiter);
+
+                    float dx = stof(result[1]);
+                    float dy = stof(result[2]);
+                    float dz = stof(result[3]);
+
+                    customThreadData.cubeCurrentX += dx;
+                    customThreadData.cubeCurrentY += dy;
+                    customThreadData.cubeCurrentZ += dz;
+
+                    for(string s: result){
+                        LOGD("arthur >>>>>>>>>>>>>>>> %s", s.c_str());
+                    }
+                } else if(HelloCardboardApp::startswith(message, "QUIT")){
+                    LOGD("arthur received message QUIT");
+                    keepLooping = false;
+                }
+
             }
         };
 

@@ -573,7 +573,7 @@ namespace ndk_hello_cardboard {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         if (!LoadPngFromAssetManager(env, java_asset_mgr, GL_TEXTURE_2D,
                                      texture_path)) {
-            LOGE("Couldn't load texture.");
+            LOGE("arthur Couldn't load texture.");
             return false;
         }
         glGenerateMipmap(GL_TEXTURE_2D);
