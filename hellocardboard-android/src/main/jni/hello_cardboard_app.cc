@@ -43,6 +43,8 @@
 
 #define MESSAGE_LENGTH 300
 
+using namespace std;
+
 namespace ndk_hello_cardboard {
 
     namespace {
@@ -98,7 +100,43 @@ namespace ndk_hello_cardboard {
         int communicationSocket; // Used to communicate from Controller to Headset
 
         const char *hostname = "192.168.1.39";
-        int portNumber = 8080;
+        struct sockaddr_in address;
+        int portNumber = 5555;
+
+        // The information that will be shared by the commmunication thread and the main thread.
+        struct ThreadData {
+
+            float cubeCurrentX;
+            float cubeCurrentY;
+            float cubeCurrentZ;
+        };
+
+        ThreadData customThreadData;
+
+        class ThreadWorker{
+        public:
+            void functionInThread(ThreadData * newData, int socket_fd){
+                LOGD("arthur functionInThread()");
+
+                // This part is moved to the thread.
+                // Listen to Socket
+                int status = listen(socket_fd, 10);
+                if(status < 0){
+                    LOGD("arthur error listening");
+                }else{
+                    LOGD("arthur listening OK");
+                }
+
+                int server_fd;
+                struct sockaddr_in client_addr;
+                socklen_t client_size = sizeof(client_addr);
+                LOGD("arthur accepting connection");
+                int new_socket = accept(socket_fd, (struct sockaddr*)&client_addr, &client_size);
+                LOGD("arthur accepted connection.");
+            }
+        };
+
+        ThreadWorker threadWorker;
 
     }  // anonymous namespace
 
@@ -136,10 +174,12 @@ namespace ndk_hello_cardboard {
         head_tracker_ = CardboardHeadTracker_create();
 
         // A single cube moves across the room and must be caught by the player.
-        isCubeMoving = true;
-        cubeCurrentX = 0;
-        cubeCurrentY = 1;
-        cubeCurrentZ = 0;
+        isCubeMoving = false;
+
+        customThreadData.cubeCurrentX = 0;
+        customThreadData.cubeCurrentY = 1;
+        customThreadData.cubeCurrentZ = 0;
+
         roomWidth = 0;
         roomHeight = 0;
 
@@ -164,6 +204,7 @@ namespace ndk_hello_cardboard {
         CardboardLensDistortion_destroy(lens_distortion_);
         CardboardDistortionRenderer_destroy(distortion_renderer_);
     }
+
 
     void HelloCardboardApp::OnSurfaceCreated(JNIEnv* env) {
         const int obj_vertex_shader =
@@ -291,18 +332,17 @@ namespace ndk_hello_cardboard {
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-            float cubeCurrentX = 0;
 
             // This part must be taken care of in a timer.
-            if (isCubeMoving) {
-
-                cubeCurrentX += cubeVx;
-                cubeCurrentY += cubeVy;
-                cubeCurrentZ += cubeVz;
-
-                boundSpeed();
-            }
-            cube_position_matrix = GetTranslationMatrix({cubeCurrentX, cubeCurrentY, cubeCurrentZ});
+//            if (isCubeMoving) {
+//
+//                customThreadData.cubeCurrentX += cubeVx;
+//                customThreadData.cubeCurrentY += cubeVy;
+//                customThreadData.cubeCurrentZ += cubeVz;
+//
+//                boundSpeed();
+//            }
+            cube_position_matrix = GetTranslationMatrix({customThreadData.cubeCurrentX, customThreadData.cubeCurrentY, customThreadData.cubeCurrentZ});
 
 
             // Draw eyes views
@@ -718,30 +758,30 @@ namespace ndk_hello_cardboard {
     void HelloCardboardApp::boundSpeed() {
         float margin = 0.2;
 
-        if (cubeCurrentY < -0 && cubeVy < 0) {
-            cubeCurrentY = margin;
+        if (customThreadData.cubeCurrentY < -0 && cubeVy < 0) {
+            customThreadData.cubeCurrentY = margin;
             cubeVy = -cubeVy;
         }
-        if (cubeCurrentY > roomHeight && cubeVy > 0) {
-            cubeCurrentY = roomHeight - margin;
+        if (customThreadData.cubeCurrentY > roomHeight && cubeVy > 0) {
+            customThreadData.cubeCurrentY = roomHeight - margin;
             cubeVy = -cubeVy;
         }
 
-        if (cubeCurrentX < -roomWidth / 2 && cubeVy < 0) {
-            cubeCurrentX = -roomWidth / 2 + margin;
+        if (customThreadData.cubeCurrentX < -roomWidth / 2 && cubeVy < 0) {
+            customThreadData.cubeCurrentX = -roomWidth / 2 + margin;
             cubeVx = -cubeVx;
         }
-        if (cubeCurrentX > roomWidth / 2 && cubeVx > 0) {
-            cubeCurrentX = roomWidth / 2 - margin;
+        if (customThreadData.cubeCurrentX > roomWidth / 2 && cubeVx > 0) {
+            customThreadData.cubeCurrentX = roomWidth / 2 - margin;
             cubeVx = -cubeVx;
         }
 
-        if (cubeCurrentZ < -roomWidth / 2 && cubeVz < 0) {
-            cubeCurrentZ = -roomWidth / 2 + margin;
+        if (customThreadData.cubeCurrentZ < -roomWidth / 2 && cubeVz < 0) {
+            customThreadData.cubeCurrentZ = -roomWidth / 2 + margin;
             cubeVz = -cubeVz;
         }
-        if (cubeCurrentZ > roomWidth / 2 && cubeVz > 0) {
-            cubeCurrentZ = roomWidth / 2 - margin;
+        if (customThreadData.cubeCurrentZ > roomWidth / 2 && cubeVz > 0) {
+            customThreadData.cubeCurrentZ = roomWidth / 2 - margin;
             cubeVz = -cubeVz;
         }
     }
@@ -789,38 +829,81 @@ namespace ndk_hello_cardboard {
         }
     }
 
+
     /** The headset is the server-side of the TCP communication.
      *
      */
     void HelloCardboardApp::setupServerForHeadset() const {
-        int server_fd, new_socket;
-        struct sockaddr_in address;
-        int opt = 1;
-        ssize_t valread;
 
-        socklen_t addrlen = sizeof(address);
-
-        char buffer[1024] = { 0 };
-
-        server_fd = socket(AF_INET, SOCK_STREAM, 0);
-        setsockopt(server_fd, SOL_SOCKET,
-                   SO_REUSEADDR | SO_REUSEPORT, &opt,
-                   sizeof(opt));
-        LOGD("arthur setsockopt DONE");
-        address.sin_family = AF_INET;
-        address.sin_addr.s_addr = INADDR_ANY;
-        address.sin_port = htons(portNumber);
+        int socket_fd = 0; // socket file descriptor
+//        int connect_fd = 0; // used to set new client thread connect_fd
+        int status; // used to check status of c functions return values
+        struct sockaddr_in server_addr;
+        pthread_t tid;
+        struct sockaddr_in client_addr;
+        socklen_t client_size = sizeof(client_addr);
 
 
-        bind(server_fd, (struct sockaddr*)&address, sizeof(address));  // result must be >= 0
-        LOGD("arthur bind DONE");
-        listen(server_fd, 3); // result must be >= 0
-        LOGD("arthur listening...");
+        server_addr.sin_family = AF_INET; // sets to use IP
+        server_addr.sin_addr.s_addr = htonl(INADDR_ANY); // sets our local IP address
+        server_addr.sin_port = htons(portNumber); // sets the server port number
+        // Create Socket
+        socket_fd = socket(AF_INET, SOCK_STREAM, 0); // creates IP based TCP socket
+        if (socket_fd < 0) {
+            LOGD("arthur socket creation error");
+        }else {
+            LOGD("arthur socket creation OK");
+        }
 
-        new_socket = accept(server_fd, (struct sockaddr*)&address, &addrlen);
-        LOGD("arthur new socket created");
 
-        LOGD("arthur end transmission from controller");
+        // Bind Socket
+        // using "::bind" instead of "bind" to show it is not std::bind
+        status = ::bind(socket_fd, (struct sockaddr *)&server_addr, sizeof(struct sockaddr));
+        if(status < 0){
+            LOGD("arthur error binding");
+        }else{
+            LOGD("arthur bind OK");
+        }
+
+
+        std::thread my_thread(&ThreadWorker::functionInThread, &threadWorker, &customThreadData, socket_fd);
+
+        my_thread.detach();
+//
+//        // This part is moved to the thread.
+//        // Listen to Socket
+//        status = listen(socket_fd, 10);
+//        if(status < 0){
+//            LOGD("arthur error listening");
+//        }else{
+//            LOGD("arthur listening OK");
+//        }
+//
+//        int server_fd;
+//        LOGD("arthur accepting connection");
+//        int new_socket = accept(socket_fd, (struct sockaddr*)&client_addr, &client_size);
+//        LOGD("arthur accepted connection.");
+    }
+
+
+
+
+    vector<string> HelloCardboardApp::string_split(string &message, const string &delimiter) {
+        __ndk1::vector<string> result;
+        size_t pos = 0;
+        string token;
+
+        while((pos = message.find(delimiter)) != std::string::npos){
+            token = message.substr(0, pos);
+            result.push_back(token);
+            message.erase(0, pos + delimiter.length());
+        }
+        result.push_back(message);
+        return result;
+    }
+
+    bool HelloCardboardApp::startswith(string s, string sub) {
+        return (s.substr(0, sub.length()) == sub);
     }
 
     /** The controller is the client-side of the TCP communication.

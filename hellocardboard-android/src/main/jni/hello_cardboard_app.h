@@ -26,11 +26,23 @@
 #include <vector>
 
 #include <GLES2/gl2.h>
+#include <linux/in.h>
 #include "cardboard.h"
 #include "util.h"
 
+
+using namespace std;
+
 namespace ndk_hello_cardboard {
 
+
+    // The information that will be shared by the commmunication thread and the main thread.
+    struct ThreadData {
+
+        float cubeCurrentX;
+        float cubeCurrentY;
+        float cubeCurrentZ;
+    };
 /**
  * This is a sample app for the Cardboard SDK. It loads a simple environment and
  * objects that you can click on.
@@ -155,9 +167,9 @@ namespace ndk_hello_cardboard {
          */
         bool IsPointingAtTarget();
         bool IsPointingAtTarget(Matrix4x4 target_position_matrix_param);
-        float cubeCurrentX;
-        float cubeCurrentY;
-        float cubeCurrentZ;
+//        float cubeCurrentX;
+//        float cubeCurrentY;
+//        float cubeCurrentZ;
         float cubeVx;
         float cubeVy;
         float cubeVz;
@@ -262,6 +274,16 @@ namespace ndk_hello_cardboard {
         void sendMessageToHeadset(char *message) const;
 
         ssize_t readFromClient(int new_socket, char *buffer) const;
+
+//        static void functionInThread(int server_fd, int new_socket);
+
+//        static void functionInThread(int server_fd, int new_socket, sockaddr_in address, socklen_t addrlen);
+
+//        static void processClientMessage(char recv_client_msg[]);
+
+    public: static bool startswith(std::string s, std::string sub);
+
+        static vector<std::string> string_split(std::string &message, const std::string &delimiter);
     };
 
 }  // namespace ndk_hello_cardboard

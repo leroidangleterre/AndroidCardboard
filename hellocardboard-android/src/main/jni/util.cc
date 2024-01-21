@@ -371,6 +371,19 @@ namespace ndk_hello_cardboard {
         return result;
     }
 
+    // Converts a matrix to a String.
+    std::string Matrix4x4::toString(){
+        std::string result="";
+        for(int i=0; i<4; i++){
+            for(int j=0; j<4; j++){
+                std::string value = std::to_string(m[i][j]);
+                result.append(value);
+                result.append(" ");
+            }
+        }
+        return result;
+    }
+
     Matrix4x4 Quatf::ToMatrix() {
         // Based on ion::math::RotationMatrix3x3
         const float xx = 2 * x * x;

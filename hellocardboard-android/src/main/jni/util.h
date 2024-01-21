@@ -49,6 +49,9 @@ namespace ndk_hello_cardboard {
 
         // Converts a matrix to an array of floats suitable for passing to OpenGL.
         std::array<float, 16> ToGlArray();
+
+        // Converts a matrix to a String.
+        std::string toString();
     };
 
     struct Quatf {
