@@ -157,17 +157,21 @@ namespace ndk_hello_cardboard {
                     LOGD("arthur controller click");
                 } else if(HelloCardboardApp::startswith(message, CONTROLLER_MATRIX)){
                     LOGD("arthur received matrix from controller ; uncomment this");
-//                    vector matrix_values = HelloCardboardApp::string_split(message, " ");
-//                    int rank = 1;
-//                    LOGD("arthur Received matrix:");
-//                    for(int row = 0; row < 4; row++){
-//                        for(int col = 0; col < 4; col++) {
-//                            customThreadData.controllerMatrix.m[row][col] = std::stof(matrix_values.at(rank));
-//                            LOGD("arthur\t\t%f", customThreadData.controllerMatrix.m[row][col]);
-//                        }
-//                        LOGD("arthur next line");
-//                    }
-//                    LOGD("arthur Received matrix end.");
+                    vector matrix_values = HelloCardboardApp::string_split(message, " ");
+                    int rank = 1;
+                    LOGD("arthur Received matrix:");
+                    for(int row = 0; row < 4; row++){
+                        for(int col = 0; col < 4; col++) {
+                            customThreadData.controller_position_matrix.m[row][col] = std::stof(matrix_values.at(rank));
+                            rank++;
+                        }
+                        LOGD("arthur   %f %f %f %f",
+                             customThreadData.controller_position_matrix.m[row][0],
+                             customThreadData.controller_position_matrix.m[row][1],
+                             customThreadData.controller_position_matrix.m[row][2],
+                             customThreadData.controller_position_matrix.m[row][3]);
+                    }
+                    LOGD("arthur Received matrix end.");
 
                 } else if(HelloCardboardApp::startswith(message, CONTROLLER_QUIT)){
                     LOGD("arthur received message CONTROLLER_QUIT");
@@ -323,16 +327,16 @@ namespace ndk_hello_cardboard {
                                               "CubeRoom.obj", asset_mgr_));
         HELLOCARDBOARD_CHECK(cube_.Initialize(obj_position_param_, obj_uv_param_,
                                               "arthurCube.obj", asset_mgr_));
-//        HELLOCARDBOARD_CHECK(controller_.Initialize(obj_position_param_, obj_uv_param_,
-//                                                    "Controller.obj", asset_mgr_));
+        HELLOCARDBOARD_CHECK(controller_.Initialize(obj_position_param_, obj_uv_param_,
+                                                    "arthurCube.obj", asset_mgr_));
         HELLOCARDBOARD_CHECK(
                 room_tex_.Initialize(env, java_asset_mgr_, "CubeRoom_BakedDiffuse.png"));
         HELLOCARDBOARD_CHECK(
                 cube_tex_.Initialize(env, java_asset_mgr_, "arthur_cube.png"));
-//        HELLOCARDBOARD_CHECK(
-//                controller_tex_.Initialize(env, java_asset_mgr_, "controller_tex.png"));
         HELLOCARDBOARD_CHECK(
                 cube_tex_selected_.Initialize(env, java_asset_mgr_, "arthur_cube_selected.png"));
+        HELLOCARDBOARD_CHECK(
+                controller_tex_.Initialize(env, java_asset_mgr_, "arthur_cube_selected.png"));
         HELLOCARDBOARD_CHECK(target_object_meshes_[0].Initialize(
                 obj_position_param_, obj_uv_param_, "Icosahedron.obj", asset_mgr_));
         HELLOCARDBOARD_CHECK(target_object_not_selected_textures_[0].Initialize(
@@ -362,7 +366,7 @@ namespace ndk_hello_cardboard {
         // Target object first appears directly in front of user.
         target_position_matrix = GetTranslationMatrix({0.0f, 1.5f, -kMinTargetDistance});
         cube_position_matrix = GetTranslationMatrix({0.0f, 1.5f, 0.0f});
-//        customThreadData.controllerMatrix = GetTranslationMatrix({2.0f, 1.5f, 0.0f});
+        customThreadData.controller_position_matrix = GetTranslationMatrix({0.5f, 2.0f, 0.0f});
         roomWidth = 10;
         roomHeight = 7;
 
@@ -466,6 +470,7 @@ namespace ndk_hello_cardboard {
                 target_projection_matrix_ = eye_projection_matrix * modelview_target;
                 roomProjectionMatrix_ = eye_projection_matrix * eye_view;
                 cube_projection_matrix_ = eye_projection_matrix * eye_view * cube_position_matrix;
+                controller_projection_matrix_ = eye_projection_matrix * eye_view * customThreadData.controller_position_matrix;
 
                 // Draw room and target
                 DrawWorld(eye_projection_matrix * eye_view);
@@ -546,13 +551,13 @@ namespace ndk_hello_cardboard {
                 if (getInitMenuValue(rank) == 0) {
                     isHeadset = true;
                     // Initial player position/coordinates (when the phone is the headset)
-//                    viewer_position_x = -2.0f;
-//                    viewer_position_y = kDefaultFloorHeight;
-//                    viewer_position_z = -2.0f;
+                    viewer_position_x = -2.0f;
+                    viewer_position_y = kDefaultFloorHeight;
+                    viewer_position_z = -2.0f;
                     // Place the player high above the room for testing purposes
-                    viewer_position_x = 0.0f; //-2.0f;
-                    viewer_position_y = -10.0f;// kDefaultFloorHeight;
-                    viewer_position_z = 0.0f; //-2.0f;
+//                    viewer_position_x = 0.0f; //-2.0f;
+//                    viewer_position_y = -10.0f;// kDefaultFloorHeight;
+//                    viewer_position_z = 0.0f; //-2.0f;
                     LOGD("arthur setting up HEADSET");
                     setupServer();
                     LOGD("arthur setting up HEADSET DONE");
@@ -725,8 +730,8 @@ namespace ndk_hello_cardboard {
         if (isHeadset) {
             DrawRoom();
             DrawCube();
-//            DrawController();
-            DrawTarget();
+            DrawController();
+//            DrawTarget();
         } else if (isController) {
             // Draw buttons on the controller screen; the virtual controller will be drawn in the headset.
         } else {
@@ -796,16 +801,16 @@ namespace ndk_hello_cardboard {
     void HelloCardboardApp::DrawCube() {
         DrawCube(cube_projection_matrix_);
     }
-//    void HelloCardboardApp::DrawController() {
-//        DrawController(customThreadData.controllerMatrix);
-//    }
+    void HelloCardboardApp::DrawController() {
+        DrawController(controller_projection_matrix_);
+    }
 
     void HelloCardboardApp::DrawCube(Matrix4x4 projection_matrix_) {
         DrawCube(projection_matrix_, -1);
     }
-//    void HelloCardboardApp::DrawController(Matrix4x4 projection_matrix_) {
-//        DrawController(projection_matrix_, -1);
-//    }
+    void HelloCardboardApp::DrawController(Matrix4x4 projection_matrix_) {
+        DrawController(projection_matrix_, -1);
+    }
 
     /**
      *
@@ -840,23 +845,23 @@ namespace ndk_hello_cardboard {
     }
 
 
-//    /**
-//     *
-//     * @param projection_matrix_
-//     * @param texture_id if -1: texture is defined by the DrawCube function; other: index of texture in array
-//     */
-//    void HelloCardboardApp::DrawController(Matrix4x4 projection_matrix_, int texture_id) {
-//        glUseProgram(obj_program_);
-//
-//        std::array<float, 16> controller_array = projection_matrix_.ToGlArray();
-//        glUniformMatrix4fv(obj_modelview_projection_param_, 1, GL_FALSE,
-//                           controller_array.data());
-//        controller_tex_.Bind();
-//
-//        controller_.Draw();
-//
-//        CHECKGLERROR("DrawController");
-//    }
+    /**
+     *
+     * @param projection_matrix_
+     * @param texture_id if -1: texture is defined by the DrawCube function; other: index of texture in array
+     */
+    void HelloCardboardApp::DrawController(Matrix4x4 projection_matrix_, int texture_id) {
+        glUseProgram(obj_program_);
+
+        std::array<float, 16> controller_array = projection_matrix_.ToGlArray();
+        glUniformMatrix4fv(obj_modelview_projection_param_, 1, GL_FALSE,
+                           controller_array.data());
+        controller_tex_.Bind();
+
+        controller_.Draw();
+
+        CHECKGLERROR("DrawController");
+    }
 
     void HelloCardboardApp::HideTarget() {
         cur_target_object_ = RandomUniformInt(kTargetMeshCount);
