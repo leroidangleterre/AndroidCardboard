@@ -26,9 +26,6 @@ import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
 import android.os.Bundle;
 import android.provider.Settings;
-
-import androidx.appcompat.app.AppCompatActivity;
-
 import android.util.Log;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -38,11 +35,17 @@ import android.view.WindowManager;
 import android.widget.PopupMenu;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
-import androidx.core.app.ActivityCompat;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.Enumeration;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 
 /**
  * A Google Cardboard VR NDK sample application.
@@ -73,6 +76,9 @@ public class VrActivity extends AppCompatActivity implements PopupMenu.OnMenuIte
     public void onCreate(Bundle savedInstance) {
         super.onCreate(savedInstance);
 
+        String localIP = getLocalIpAddress();
+        Log.d(TAG, "onCreate: arthur " + localIP);
+
         nativeApp = nativeOnCreate(getAssets());
 
         setContentView(R.layout.activity_vr);
@@ -87,7 +93,7 @@ public class VrActivity extends AppCompatActivity implements PopupMenu.OnMenuIte
                         // Signal a trigger event.
                         glView.queueEvent(
                                 () -> {
-                                    nativeOnTriggerEvent(nativeApp);
+                                    nativeOnTriggerEvent(nativeApp, event.getX(), event.getY());
                                 });
                         return true;
                     }
@@ -107,11 +113,29 @@ public class VrActivity extends AppCompatActivity implements PopupMenu.OnMenuIte
 
         // Forces screen to max brightness.
         WindowManager.LayoutParams layout = getWindow().getAttributes();
-        layout.screenBrightness = 1.f;
+        Log.d(TAG, "Set brightness here");
+        //        layout.screenBrightness = 1.f;
         getWindow().setAttributes(layout);
 
         // Prevents screen from dimming/locking.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    protected String getLocalIpAddress() {
+        try {
+            for (Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces(); en.hasMoreElements(); ) {
+                NetworkInterface intf = en.nextElement();
+                for (Enumeration<InetAddress> enumIpAddr = intf.getInetAddresses(); enumIpAddr.hasMoreElements(); ) {
+                    InetAddress inetAddress = enumIpAddr.nextElement();
+                    if (!inetAddress.isLoopbackAddress() && inetAddress instanceof Inet4Address) {
+                        return inetAddress.getHostAddress();
+                    }
+                }
+            }
+        } catch (SocketException e) {
+            throw new RuntimeException(e);
+        }
+        return "LOCAL_IP_NOT_FOUND";
     }
 
     @Override
@@ -224,7 +248,7 @@ public class VrActivity extends AppCompatActivity implements PopupMenu.OnMenuIte
      */
     @Override
     public void onRequestPermissionsResult(
-            int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+            int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (!isReadExternalStorageEnabled()) {
             Toast.makeText(this, R.string.read_storage_permission, Toast.LENGTH_LONG).show();
@@ -265,7 +289,7 @@ public class VrActivity extends AppCompatActivity implements PopupMenu.OnMenuIte
 
     private native void nativeOnDrawFrame(long nativeApp);
 
-    private native void nativeOnTriggerEvent(long nativeApp);
+    private native void nativeOnTriggerEvent(long nativeApp, float x, float y);
 
     private native void nativeOnPause(long nativeApp);
 

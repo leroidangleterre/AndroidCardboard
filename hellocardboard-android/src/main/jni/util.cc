@@ -371,6 +371,19 @@ namespace ndk_hello_cardboard {
         return result;
     }
 
+    // Converts a matrix to a String.
+    std::string Matrix4x4::toString(){
+        std::string result="";
+        for(int i=0; i<4; i++){
+            for(int j=0; j<4; j++){
+                std::string value = std::to_string(m[i][j]);
+                result.append(value);
+                result.append(" ");
+            }
+        }
+        return result;
+    }
+
     Matrix4x4 Quatf::ToMatrix() {
         // Based on ion::math::RotationMatrix3x3
         const float xx = 2 * x * x;
@@ -529,7 +542,6 @@ namespace ndk_hello_cardboard {
             LOGE("arthur load cube KO");
             return false;
         }
-        LOGE("arthur load cube OK");
         return true;
     }
 
@@ -561,11 +573,10 @@ namespace ndk_hello_cardboard {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         if (!LoadPngFromAssetManager(env, java_asset_mgr, GL_TEXTURE_2D,
                                      texture_path)) {
-            LOGE("Couldn't load texture.");
+            LOGE("arthur Couldn't load texture.");
             return false;
         }
         glGenerateMipmap(GL_TEXTURE_2D);
-        LOGE("arthur texture load ok %s", texture_path.c_str());
         return true;
     }
 
@@ -573,7 +584,6 @@ namespace ndk_hello_cardboard {
         HELLOCARDBOARD_CHECK(texture_id_ != 0);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, texture_id_);
-//    LOGE("arthur: Texture::Bind(), texture_id_ is %d", texture_id_);
     }
 
 }  // namespace ndk_hello_cardboard

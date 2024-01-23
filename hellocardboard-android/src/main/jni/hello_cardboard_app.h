@@ -26,11 +26,24 @@
 #include <vector>
 
 #include <GLES2/gl2.h>
+#include <linux/in.h>
 #include "cardboard.h"
 #include "util.h"
 
+
+using namespace std;
+
 namespace ndk_hello_cardboard {
 
+
+    // The information that will be shared by the commmunication thread and the main thread.
+    struct ThreadData {
+
+        float cubeCurrentX;
+        float cubeCurrentY;
+        float cubeCurrentZ;
+//        Matrix4x4 controllerMatrix;
+    };
 /**
  * This is a sample app for the Cardboard SDK. It loads a simple environment and
  * objects that you can click on.
@@ -72,7 +85,7 @@ namespace ndk_hello_cardboard {
         /**
          * Hides the target object if it's being targeted.
          */
-        void OnTriggerEvent();
+        void OnTriggerEvent(jfloat d, jfloat d1);
 
         /**
          * Pauses head tracking.
@@ -125,11 +138,6 @@ namespace ndk_hello_cardboard {
         Matrix4x4 GetPose();
 
         /**
-         * Draws all world-space objects for the given eye.
-         */
-        void DrawWorld();
-
-        /**
          * Draws the target object.
          */
         void DrawTarget();
@@ -146,6 +154,13 @@ namespace ndk_hello_cardboard {
         void DrawCube(Matrix4x4 projection_matrix_);
         void DrawCube(Matrix4x4 projection_matrix_, int texture_id);
 
+//        /**
+//         * Draws the controller
+//         */
+//        void DrawController();
+//        void DrawController(Matrix4x4 projection_matrix_);
+//        void DrawController(Matrix4x4 projection_matrix_, int texture_id);
+
         /**
          * Finds a new random position for the target object.
          */
@@ -160,9 +175,9 @@ namespace ndk_hello_cardboard {
          */
         bool IsPointingAtTarget();
         bool IsPointingAtTarget(Matrix4x4 target_position_matrix_param);
-        float cubeCurrentX;
-        float cubeCurrentY;
-        float cubeCurrentZ;
+//        float cubeCurrentX;
+//        float cubeCurrentY;
+//        float cubeCurrentZ;
         float cubeVx;
         float cubeVy;
         float cubeVz;
@@ -210,9 +225,11 @@ namespace ndk_hello_cardboard {
 
         TexturedMesh room_;
         TexturedMesh cube_;
+//        TexturedMesh controller_;
         Texture room_tex_;
         Texture cube_tex_;
         Texture cube_tex_selected_;
+//        Texture controller_tex_;
 
         std::vector<TexturedMesh> target_object_meshes_;
         std::vector<Texture> target_object_not_selected_textures_;
@@ -236,7 +253,7 @@ namespace ndk_hello_cardboard {
 
         void OnTriggerEventHeadset();
 
-        void OnTriggerEventController();
+        void OnTriggerEventController(jfloat d, jfloat d1);
 
         void DefineHeadsetOrController();
 
@@ -249,6 +266,24 @@ namespace ndk_hello_cardboard {
         void setupInitMenuCoordinates();
 
         int getInitMenuValue(int cube_index);
+
+        void setupServer();
+
+        void OnDrawFrameHeadset();
+
+        void OnDrawFrameController();
+
+        void closeSockets();
+
+        void setupServerForController() const;
+
+        void setupServerForHeadset() const;
+
+        void sendMessageToHeadset(char *message) const;
+
+        public: static bool startswith(std::string s, std::string sub);
+
+        static vector<std::string> string_split(std::string &message, const std::string &delimiter);
     };
 
 }  // namespace ndk_hello_cardboard
