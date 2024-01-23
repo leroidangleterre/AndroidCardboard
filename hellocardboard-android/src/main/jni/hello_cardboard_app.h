@@ -42,6 +42,7 @@ namespace ndk_hello_cardboard {
         float cubeCurrentX;
         float cubeCurrentY;
         float cubeCurrentZ;
+//        Matrix4x4 controllerMatrix;
     };
 /**
  * This is a sample app for the Cardboard SDK. It loads a simple environment and
@@ -84,7 +85,7 @@ namespace ndk_hello_cardboard {
         /**
          * Hides the target object if it's being targeted.
          */
-        void OnTriggerEvent();
+        void OnTriggerEvent(jfloat d, jfloat d1);
 
         /**
          * Pauses head tracking.
@@ -153,6 +154,13 @@ namespace ndk_hello_cardboard {
         void DrawCube(Matrix4x4 projection_matrix_);
         void DrawCube(Matrix4x4 projection_matrix_, int texture_id);
 
+//        /**
+//         * Draws the controller
+//         */
+//        void DrawController();
+//        void DrawController(Matrix4x4 projection_matrix_);
+//        void DrawController(Matrix4x4 projection_matrix_, int texture_id);
+
         /**
          * Finds a new random position for the target object.
          */
@@ -217,9 +225,11 @@ namespace ndk_hello_cardboard {
 
         TexturedMesh room_;
         TexturedMesh cube_;
+//        TexturedMesh controller_;
         Texture room_tex_;
         Texture cube_tex_;
         Texture cube_tex_selected_;
+//        Texture controller_tex_;
 
         std::vector<TexturedMesh> target_object_meshes_;
         std::vector<Texture> target_object_not_selected_textures_;
@@ -243,7 +253,7 @@ namespace ndk_hello_cardboard {
 
         void OnTriggerEventHeadset();
 
-        void OnTriggerEventController();
+        void OnTriggerEventController(jfloat d, jfloat d1);
 
         void DefineHeadsetOrController();
 
@@ -269,19 +279,9 @@ namespace ndk_hello_cardboard {
 
         void setupServerForHeadset() const;
 
-        void sendMessageToHeadset() const;
-
         void sendMessageToHeadset(char *message) const;
 
-        ssize_t readFromClient(int new_socket, char *buffer) const;
-
-//        static void functionInThread(int server_fd, int new_socket);
-
-//        static void functionInThread(int server_fd, int new_socket, sockaddr_in address, socklen_t addrlen);
-
-//        static void processClientMessage(char recv_client_msg[]);
-
-    public: static bool startswith(std::string s, std::string sub);
+        public: static bool startswith(std::string s, std::string sub);
 
         static vector<std::string> string_split(std::string &message, const std::string &delimiter);
     };

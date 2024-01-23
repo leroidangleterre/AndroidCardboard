@@ -42,6 +42,9 @@
 # include <unistd.h>
 
 #define MESSAGE_LENGTH 300
+static const char *const CONTROLLER_CLICK_EVENT = "CONTROLLER_CLICK_EVENT ";
+static const char *const CONTROLLER_QUIT = "CONTROLLER_QUIT ";
+static const char *const CONTROLLER_MATRIX = "CONTROLLER_MATRIX ";
 
 using namespace std;
 
@@ -103,65 +106,38 @@ namespace ndk_hello_cardboard {
         struct sockaddr_in address;
         int portNumber = 5555;
 
-        // The information that will be shared by the commmunication thread and the main thread.
-        struct ThreadData {
-
-            float cubeCurrentX;
-            float cubeCurrentY;
-            float cubeCurrentZ;
-        };
-
         ThreadData customThreadData;
 
-        class ThreadWorker{
+        /**
+         * Receive information from a single client via an already-created thread.
+         */
+        class SingleClientHandler{
         public:
 
             bool keepLooping;
 
-            void functionInThread(ThreadData * newData, int socket_fd){
-                LOGD("arthur functionInThread()");
-
-                // This part is moved to the thread.
-                // Listen to Socket
-                int status = listen(socket_fd, 10);
-                if(status < 0){
-                    LOGD("arthur error listening");
-                }else{
-                    LOGD("arthur listening OK");
-                }
-
-                int server_fd;
-                struct sockaddr_in client_addr;
-                socklen_t client_size = sizeof(client_addr);
-//                LOGD("arthur waiting for connection");
-                int new_socket = accept(socket_fd, (struct sockaddr*)&client_addr, &client_size);
-                LOGD("arthur accepted connection.");
+            void talkToSingleClient(int * new_socket) {
 
                 keepLooping = true;
-                do{
+                do {
                     vector<char> buffer(5000);
                     int bytes = 0;
-//                    LOGD("arthur before recv loop");
                     do {
-                        bytes = recv(new_socket, buffer.data(), buffer.size(), 0);
-                    }while(bytes <= 0);
-//                    LOGD("arthur after recv loop");
+                        bytes = recv(*new_socket, buffer.data(), buffer.size(), 0);
+                    } while (bytes <= 0);
                     string message(buffer.begin(), buffer.end());
                     processClientMessage(message);
-//                    LOGD("arthur received <%s>", message.c_str());
-                }while(keepLooping);
-                LOGD("arthur THREAD END");
+                } while (keepLooping);
             }
 
             /** Process the messages received from the client.
              *
-             * @param recv_client_msg the message may start with "MOVECUBE", "QUIT", "MATRIX"
+             * @param recv_client_msg the message may start with "MOVECUBE", "CONTROLLER_QUIT", "MATRIX"
              * "MOVECUBE dx dy dz"
-             * "QUIT"
+             * "CONTROLLER_QUIT"
              * "MATRIX numerical values of the client's 3d location"
              */
             void processClientMessage(string message){ //, ThreadData &data){
-                LOGD("arthur received from client: <%s>", message.c_str());
                 if(HelloCardboardApp::startswith(message, "MOVE")){
 
                     string message_copy = message;
@@ -177,18 +153,83 @@ namespace ndk_hello_cardboard {
                     customThreadData.cubeCurrentY += dy;
                     customThreadData.cubeCurrentZ += dz;
 
-                    for(string s: result){
-                        LOGD("arthur >>>>>>>>>>>>>>>> %s", s.c_str());
-                    }
-                } else if(HelloCardboardApp::startswith(message, "QUIT")){
-                    LOGD("arthur received message QUIT");
+                } else if(HelloCardboardApp::startswith(message, CONTROLLER_CLICK_EVENT)){
+                    LOGD("arthur controller click");
+                } else if(HelloCardboardApp::startswith(message, CONTROLLER_MATRIX)){
+                    LOGD("arthur received matrix from controller ; uncomment this");
+//                    vector matrix_values = HelloCardboardApp::string_split(message, " ");
+//                    int rank = 1;
+//                    LOGD("arthur Received matrix:");
+//                    for(int row = 0; row < 4; row++){
+//                        for(int col = 0; col < 4; col++) {
+//                            customThreadData.controllerMatrix.m[row][col] = std::stof(matrix_values.at(rank));
+//                            LOGD("arthur\t\t%f", customThreadData.controllerMatrix.m[row][col]);
+//                        }
+//                        LOGD("arthur next line");
+//                    }
+//                    LOGD("arthur Received matrix end.");
+
+                } else if(HelloCardboardApp::startswith(message, CONTROLLER_QUIT)){
+                    LOGD("arthur received message CONTROLLER_QUIT");
                     keepLooping = false;
                 }
 
             }
         };
 
-        ThreadWorker threadWorker;
+        /**
+         * Listen to all incoming connections and create a custom thread for each client.
+         */
+        class AllClientsHandler{
+        public:
+
+            void receiveNewClients(){
+                LOGD("arthur receiveNewClients()");
+
+                // Create Socket
+                int socket_fd = socket(AF_INET, SOCK_STREAM, 0); // creates IP based TCP socket
+                if (socket_fd < 0) {
+                    LOGD("arthur socket creation error");
+                }
+
+                // Bind Socket
+                struct sockaddr_in server_addr;
+                server_addr.sin_family = AF_INET; // sets to use IP
+                server_addr.sin_addr.s_addr = htonl(INADDR_ANY); // sets our local IP address
+                server_addr.sin_port = htons(portNumber); // sets the server port number
+                int status; // used to check status of c functions return values
+                // using "::bind" instead of "bind" to show it is not std::bind
+                status = ::bind(socket_fd, (struct sockaddr *)&server_addr, sizeof(struct sockaddr));
+                if(status < 0){
+                    LOGD("arthur error binding");
+                }
+
+                while(true) {
+                    LOGD("arthur receiveNewClients in thread loop");
+                    // This part is moved to the thread.
+                    // Listen to Socket
+                    int status = listen(socket_fd, 10);
+                    if (status < 0) {
+                        LOGD("arthur error listening");
+                    } else {
+                        LOGD("arthur listening OK");
+                    }
+
+                    struct sockaddr_in client_addr;
+                    socklen_t client_size = sizeof(client_addr);
+                    int new_socket = accept(socket_fd, (struct sockaddr *) &client_addr, &client_size);
+                    LOGD("arthur accepted connection.");
+
+                    // New Thread
+                    SingleClientHandler handler;
+                    std::thread custom_thread(&SingleClientHandler::talkToSingleClient, &handler, &new_socket);
+                    custom_thread.detach();
+                }
+                LOGD("arthur THREAD END");
+            }
+        };
+
+        AllClientsHandler threadWorker;
 
     }  // anonymous namespace
 
@@ -282,10 +323,14 @@ namespace ndk_hello_cardboard {
                                               "CubeRoom.obj", asset_mgr_));
         HELLOCARDBOARD_CHECK(cube_.Initialize(obj_position_param_, obj_uv_param_,
                                               "arthurCube.obj", asset_mgr_));
+//        HELLOCARDBOARD_CHECK(controller_.Initialize(obj_position_param_, obj_uv_param_,
+//                                                    "Controller.obj", asset_mgr_));
         HELLOCARDBOARD_CHECK(
                 room_tex_.Initialize(env, java_asset_mgr_, "CubeRoom_BakedDiffuse.png"));
         HELLOCARDBOARD_CHECK(
                 cube_tex_.Initialize(env, java_asset_mgr_, "arthur_cube.png"));
+//        HELLOCARDBOARD_CHECK(
+//                controller_tex_.Initialize(env, java_asset_mgr_, "controller_tex.png"));
         HELLOCARDBOARD_CHECK(
                 cube_tex_selected_.Initialize(env, java_asset_mgr_, "arthur_cube_selected.png"));
         HELLOCARDBOARD_CHECK(target_object_meshes_[0].Initialize(
@@ -311,10 +356,13 @@ namespace ndk_hello_cardboard {
                 env, java_asset_mgr_, "menu_headset.png"));
         HELLOCARDBOARD_CHECK(texture_array_[1].Initialize(
                 env, java_asset_mgr_, "menu_controller.png"));
+        HELLOCARDBOARD_CHECK(texture_array_[2].Initialize(
+                env, java_asset_mgr_, "controller_tex.png"));
 
         // Target object first appears directly in front of user.
         target_position_matrix = GetTranslationMatrix({0.0f, 1.5f, -kMinTargetDistance});
         cube_position_matrix = GetTranslationMatrix({0.0f, 1.5f, 0.0f});
+//        customThreadData.controllerMatrix = GetTranslationMatrix({2.0f, 1.5f, 0.0f});
         roomWidth = 10;
         roomHeight = 7;
 
@@ -345,21 +393,29 @@ namespace ndk_hello_cardboard {
 
         // Update Head Pose.
         head_view_ = GetPose();
-//
 
-//        char message[] = "coucou   "; // Cannot be longer that messageLength
-//        message[9] = messageNumber % 10 + '0';
-//
+        // Send the controller's matrix to the headset
         if(1000*(messageNumber/1000) == messageNumber) {
-//        sendMessageToHeadset(message);
-//        // Send the controller's matrix to the headset
-            std::string textMatrix4x4 = head_view_.toString();
+            std::string textMatrix4x4 = CONTROLLER_MATRIX + head_view_.toString();
             char *message = new char[textMatrix4x4.length() + 1];
 
             strcpy(message, textMatrix4x4.c_str());
-//        LOGD("arthur Controller sending matrix to headset: %s", message);
-//        LOGD("arthur size of message sent: %d", strlen(message));
-//        sendMessageToHeadset(message);
+
+            LOGD("arthur formatting message...");
+            vector<string> values = HelloCardboardApp::string_split(textMatrix4x4, " ");
+
+            LOGD("arthur formatting message... 2");
+            std::string formattedMessage = "";
+            for (int i = 0; i < 17; i++) { // Write "CONTROLLER_MATRIX ", then all 16 values.
+                LOGD("arthur formatting message... 3 <%s>", formattedMessage.c_str());
+                formattedMessage += values[i] + " ";
+            }
+
+            LOGD("arthur formatted message is <%s>", formattedMessage.c_str());
+
+            //        LOGD("arthur Controller sending matrix to headset: %s", message);
+            //        LOGD("arthur size of message sent: %d", strlen(message));
+            sendMessageToHeadset(const_cast<char *>(formattedMessage.c_str()));
         }
 
 //        LOGD("arthur OnDrawFrameController DONE");
@@ -425,12 +481,12 @@ namespace ndk_hello_cardboard {
         }
     }
 
-    void HelloCardboardApp::OnTriggerEvent() {
+    void HelloCardboardApp::OnTriggerEvent(jfloat x, jfloat y) {
         LOGD("arthur on trigger");
         if (isHeadset) {
             OnTriggerEventHeadset();
         } else if (isController) {
-            OnTriggerEventController();
+            OnTriggerEventController(x, y);
         } else {
             DefineHeadsetOrController();
         }
@@ -444,14 +500,19 @@ namespace ndk_hello_cardboard {
             toggleCubeMovement();
         }
     }
-    void HelloCardboardApp::OnTriggerEventController() {
 
-        LOGD("arthur trigger event on controller, sending message number %d", messageNumber);
+    void HelloCardboardApp::OnTriggerEventController(jfloat x, jfloat y) {
 
-        char message[] = "coucou   "; // Cannot be longer that messageLength
-        message[8] = messageNumber % 10 + '0';
+        LOGD("arthur trigger event at (%f, %f) on controller",
+             x, y);
+
+        int xInt = x;
+        int yInt = y;
+
+        string s = CONTROLLER_CLICK_EVENT + std::to_string(xInt) + " " + std::to_string(yInt);
+        char message[s.length()+1];
+        strcpy(message, s.c_str());
         sendMessageToHeadset(message);
-        messageNumber++;
     }
 
     void HelloCardboardApp::sendMessageToHeadset(char message[]) const {
@@ -467,7 +528,7 @@ namespace ndk_hello_cardboard {
         } else {
             LOGD("arthur n>=0");
         }
-        LOGD("arthur after sending message");
+        LOGD("arthur after sending message <%s>", message);
     }
 
     void HelloCardboardApp::closeSockets(){
@@ -480,18 +541,22 @@ namespace ndk_hello_cardboard {
         LOGD("arthur define headset or controller");
 
         int rank = 0;
-        for(Matrix4x4 mat:initMenuCoordinatesArray_) {
+        for (Matrix4x4 mat: initMenuCoordinatesArray_) {
             if (IsPointingAtTarget(mat)) {
-                if(getInitMenuValue(rank) == 0){
+                if (getInitMenuValue(rank) == 0) {
                     isHeadset = true;
-                    // When the phone is set to be the headset, we may change the player's coordinates
-                    viewer_position_x = -2.0f;
-                    viewer_position_y = kDefaultFloorHeight;
-                    viewer_position_z = -2.0f;
+                    // Initial player position/coordinates (when the phone is the headset)
+//                    viewer_position_x = -2.0f;
+//                    viewer_position_y = kDefaultFloorHeight;
+//                    viewer_position_z = -2.0f;
+                    // Place the player high above the room for testing purposes
+                    viewer_position_x = 0.0f; //-2.0f;
+                    viewer_position_y = -10.0f;// kDefaultFloorHeight;
+                    viewer_position_z = 0.0f; //-2.0f;
                     LOGD("arthur setting up HEADSET");
                     setupServer();
                     LOGD("arthur setting up HEADSET DONE");
-                }else{
+                } else {
                     isController = true;
                     LOGD("arthur setting up HEADSET");
                     setupServer();
@@ -660,6 +725,7 @@ namespace ndk_hello_cardboard {
         if (isHeadset) {
             DrawRoom();
             DrawCube();
+//            DrawController();
             DrawTarget();
         } else if (isController) {
             // Draw buttons on the controller screen; the virtual controller will be drawn in the headset.
@@ -730,10 +796,16 @@ namespace ndk_hello_cardboard {
     void HelloCardboardApp::DrawCube() {
         DrawCube(cube_projection_matrix_);
     }
+//    void HelloCardboardApp::DrawController() {
+//        DrawController(customThreadData.controllerMatrix);
+//    }
 
     void HelloCardboardApp::DrawCube(Matrix4x4 projection_matrix_) {
         DrawCube(projection_matrix_, -1);
     }
+//    void HelloCardboardApp::DrawController(Matrix4x4 projection_matrix_) {
+//        DrawController(projection_matrix_, -1);
+//    }
 
     /**
      *
@@ -766,6 +838,25 @@ namespace ndk_hello_cardboard {
 
         CHECKGLERROR("DrawCube");
     }
+
+
+//    /**
+//     *
+//     * @param projection_matrix_
+//     * @param texture_id if -1: texture is defined by the DrawCube function; other: index of texture in array
+//     */
+//    void HelloCardboardApp::DrawController(Matrix4x4 projection_matrix_, int texture_id) {
+//        glUseProgram(obj_program_);
+//
+//        std::array<float, 16> controller_array = projection_matrix_.ToGlArray();
+//        glUniformMatrix4fv(obj_modelview_projection_param_, 1, GL_FALSE,
+//                           controller_array.data());
+//        controller_tex_.Bind();
+//
+//        controller_.Draw();
+//
+//        CHECKGLERROR("DrawController");
+//    }
 
     void HelloCardboardApp::HideTarget() {
         cur_target_object_ = RandomUniformInt(kTargetMeshCount);
@@ -887,54 +978,8 @@ namespace ndk_hello_cardboard {
      */
     void HelloCardboardApp::setupServerForHeadset() const {
 
-        int socket_fd = 0; // socket file descriptor
-//        int connect_fd = 0; // used to set new client thread connect_fd
-        int status; // used to check status of c functions return values
-        struct sockaddr_in server_addr;
-        pthread_t tid;
-        struct sockaddr_in client_addr;
-        socklen_t client_size = sizeof(client_addr);
-
-
-        server_addr.sin_family = AF_INET; // sets to use IP
-        server_addr.sin_addr.s_addr = htonl(INADDR_ANY); // sets our local IP address
-        server_addr.sin_port = htons(portNumber); // sets the server port number
-        // Create Socket
-        socket_fd = socket(AF_INET, SOCK_STREAM, 0); // creates IP based TCP socket
-        if (socket_fd < 0) {
-            LOGD("arthur socket creation error");
-        }else {
-            LOGD("arthur socket creation OK");
-        }
-
-
-        // Bind Socket
-        // using "::bind" instead of "bind" to show it is not std::bind
-        status = ::bind(socket_fd, (struct sockaddr *)&server_addr, sizeof(struct sockaddr));
-        if(status < 0){
-            LOGD("arthur error binding");
-        }else{
-            LOGD("arthur bind OK");
-        }
-
-
-        std::thread my_thread(&ThreadWorker::functionInThread, &threadWorker, &customThreadData, socket_fd);
-
+        std::thread my_thread(&AllClientsHandler::receiveNewClients, &threadWorker);
         my_thread.detach();
-//
-//        // This part is moved to the thread.
-//        // Listen to Socket
-//        status = listen(socket_fd, 10);
-//        if(status < 0){
-//            LOGD("arthur error listening");
-//        }else{
-//            LOGD("arthur listening OK");
-//        }
-//
-//        int server_fd;
-//        LOGD("arthur accepting connection");
-//        int new_socket = accept(socket_fd, (struct sockaddr*)&client_addr, &client_size);
-//        LOGD("arthur accepted connection.");
     }
 
 

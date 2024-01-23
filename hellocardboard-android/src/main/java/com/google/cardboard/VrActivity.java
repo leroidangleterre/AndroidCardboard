@@ -93,7 +93,7 @@ public class VrActivity extends AppCompatActivity implements PopupMenu.OnMenuIte
                         // Signal a trigger event.
                         glView.queueEvent(
                                 () -> {
-                                    nativeOnTriggerEvent(nativeApp);
+                                    nativeOnTriggerEvent(nativeApp, event.getX(), event.getY());
                                 });
                         return true;
                     }
@@ -289,7 +289,7 @@ public class VrActivity extends AppCompatActivity implements PopupMenu.OnMenuIte
 
     private native void nativeOnDrawFrame(long nativeApp);
 
-    private native void nativeOnTriggerEvent(long nativeApp);
+    private native void nativeOnTriggerEvent(long nativeApp, float x, float y);
 
     private native void nativeOnPause(long nativeApp);
 
