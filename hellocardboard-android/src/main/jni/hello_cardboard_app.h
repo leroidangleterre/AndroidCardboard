@@ -42,7 +42,7 @@ namespace ndk_hello_cardboard {
         float cubeCurrentX;
         float cubeCurrentY;
         float cubeCurrentZ;
-//        Matrix4x4 controllerMatrix;
+        Matrix4x4 controller_position_matrix;
     };
 /**
  * This is a sample app for the Cardboard SDK. It loads a simple environment and
@@ -154,12 +154,12 @@ namespace ndk_hello_cardboard {
         void DrawCube(Matrix4x4 projection_matrix_);
         void DrawCube(Matrix4x4 projection_matrix_, int texture_id);
 
-//        /**
-//         * Draws the controller
-//         */
-//        void DrawController();
-//        void DrawController(Matrix4x4 projection_matrix_);
-//        void DrawController(Matrix4x4 projection_matrix_, int texture_id);
+        /**
+         * Draws the controller
+         */
+        void DrawController();
+        void DrawController(Matrix4x4 projection_matrix_);
+        void DrawController(Matrix4x4 projection_matrix_, int texture_id);
 
         /**
          * Finds a new random position for the target object.
@@ -175,9 +175,6 @@ namespace ndk_hello_cardboard {
          */
         bool IsPointingAtTarget();
         bool IsPointingAtTarget(Matrix4x4 target_position_matrix_param);
-//        float cubeCurrentX;
-//        float cubeCurrentY;
-//        float cubeCurrentZ;
         float cubeVx;
         float cubeVy;
         float cubeVz;
@@ -221,15 +218,15 @@ namespace ndk_hello_cardboard {
         Matrix4x4 target_projection_matrix_;
         Matrix4x4 roomProjectionMatrix_;
         Matrix4x4 cube_projection_matrix_;
-
+        Matrix4x4 controller_projection_matrix_;
 
         TexturedMesh room_;
         TexturedMesh cube_;
-//        TexturedMesh controller_;
+        TexturedMesh controller_;
         Texture room_tex_;
         Texture cube_tex_;
         Texture cube_tex_selected_;
-//        Texture controller_tex_;
+        Texture controller_tex_;
 
         std::vector<TexturedMesh> target_object_meshes_;
         std::vector<Texture> target_object_not_selected_textures_;
@@ -284,6 +281,8 @@ namespace ndk_hello_cardboard {
         public: static bool startswith(std::string s, std::string sub);
 
         static vector<std::string> string_split(std::string &message, const std::string &delimiter);
+
+        void PrintMatrix4x4(Matrix4x4 m);
     };
 
 }  // namespace ndk_hello_cardboard
