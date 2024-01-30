@@ -281,6 +281,8 @@ namespace ndk_hello_cardboard {
         public: static bool startswith(std::string s, std::string sub);
 
         static vector<std::string> string_split(std::string &message, const std::string &delimiter);
+
+        void PrintMatrix4x4(Matrix4x4 m);
     };
 
 }  // namespace ndk_hello_cardboard

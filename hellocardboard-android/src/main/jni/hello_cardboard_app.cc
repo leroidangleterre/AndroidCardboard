@@ -156,7 +156,6 @@ namespace ndk_hello_cardboard {
                 } else if(HelloCardboardApp::startswith(message, CONTROLLER_CLICK_EVENT)){
                     LOGD("arthur controller click");
                 } else if(HelloCardboardApp::startswith(message, CONTROLLER_MATRIX)){
-                    LOGD("arthur received matrix from controller ; uncomment this");
                     vector matrix_values = HelloCardboardApp::string_split(message, " ");
                     int rank = 1;
                     LOGD("arthur Received matrix:");
@@ -289,6 +288,7 @@ namespace ndk_hello_cardboard {
         isHeadset = false;
         isController = false;
 
+        // Viewer position for init menu
         viewer_position_x = 0;
         viewer_position_y = -1;
         viewer_position_z = 0;
@@ -324,19 +324,19 @@ namespace ndk_hello_cardboard {
         CHECKGLERROR("Obj program params");
 
         HELLOCARDBOARD_CHECK(room_.Initialize(obj_position_param_, obj_uv_param_,
-                                              "CubeRoom.obj", asset_mgr_));
+                                              "appartement.obj", asset_mgr_));
         HELLOCARDBOARD_CHECK(cube_.Initialize(obj_position_param_, obj_uv_param_,
                                               "arthurCube.obj", asset_mgr_));
         HELLOCARDBOARD_CHECK(controller_.Initialize(obj_position_param_, obj_uv_param_,
-                                                    "arthurCube.obj", asset_mgr_));
+                                                    "Controller.obj", asset_mgr_));
         HELLOCARDBOARD_CHECK(
-                room_tex_.Initialize(env, java_asset_mgr_, "CubeRoom_BakedDiffuse.png"));
+                room_tex_.Initialize(env, java_asset_mgr_, "appartement.png"));
         HELLOCARDBOARD_CHECK(
                 cube_tex_.Initialize(env, java_asset_mgr_, "arthur_cube.png"));
         HELLOCARDBOARD_CHECK(
                 cube_tex_selected_.Initialize(env, java_asset_mgr_, "arthur_cube_selected.png"));
         HELLOCARDBOARD_CHECK(
-                controller_tex_.Initialize(env, java_asset_mgr_, "arthur_cube_selected.png"));
+                controller_tex_.Initialize(env, java_asset_mgr_, "controller_tex.png"));
         HELLOCARDBOARD_CHECK(target_object_meshes_[0].Initialize(
                 obj_position_param_, obj_uv_param_, "Icosahedron.obj", asset_mgr_));
         HELLOCARDBOARD_CHECK(target_object_not_selected_textures_[0].Initialize(
@@ -366,7 +366,11 @@ namespace ndk_hello_cardboard {
         // Target object first appears directly in front of user.
         target_position_matrix = GetTranslationMatrix({0.0f, 1.5f, -kMinTargetDistance});
         cube_position_matrix = GetTranslationMatrix({0.0f, 1.5f, 0.0f});
-        customThreadData.controller_position_matrix = GetTranslationMatrix({0.5f, 2.0f, 0.0f});
+
+        //                                                                  x: positive toward appartment door
+        //                                                                         y: positive up
+        //                                                                              z: window to wall
+        customThreadData.controller_position_matrix = GetTranslationMatrix({-1.0f, -0.7f, 0.f});
         roomWidth = 10;
         roomHeight = 7;
 
@@ -405,17 +409,12 @@ namespace ndk_hello_cardboard {
 
             strcpy(message, textMatrix4x4.c_str());
 
-            LOGD("arthur formatting message...");
             vector<string> values = HelloCardboardApp::string_split(textMatrix4x4, " ");
 
-            LOGD("arthur formatting message... 2");
             std::string formattedMessage = "";
             for (int i = 0; i < 17; i++) { // Write "CONTROLLER_MATRIX ", then all 16 values.
-                LOGD("arthur formatting message... 3 <%s>", formattedMessage.c_str());
                 formattedMessage += values[i] + " ";
             }
-
-            LOGD("arthur formatted message is <%s>", formattedMessage.c_str());
 
             //        LOGD("arthur Controller sending matrix to headset: %s", message);
             //        LOGD("arthur size of message sent: %d", strlen(message));
@@ -445,15 +444,6 @@ namespace ndk_hello_cardboard {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 
-            // This part must be taken care of in a timer.
-//            if (isCubeMoving) {
-//
-//                customThreadData.cubeCurrentX += cubeVx;
-//                customThreadData.cubeCurrentY += cubeVy;
-//                customThreadData.cubeCurrentZ += cubeVz;
-//
-//                boundSpeed();
-//            }
             cube_position_matrix = GetTranslationMatrix({customThreadData.cubeCurrentX, customThreadData.cubeCurrentY, customThreadData.cubeCurrentZ});
 
 
@@ -551,13 +541,16 @@ namespace ndk_hello_cardboard {
                 if (getInitMenuValue(rank) == 0) {
                     isHeadset = true;
                     // Initial player position/coordinates (when the phone is the headset)
-                    viewer_position_x = -2.0f;
-                    viewer_position_y = kDefaultFloorHeight;
-                    viewer_position_z = -2.0f;
+//                    viewer_position_x = -2.0f;
+//                    viewer_position_y = kDefaultFloorHeight;
+//                    viewer_position_z = -2.0f;
                     // Place the player high above the room for testing purposes
 //                    viewer_position_x = 0.0f; //-2.0f;
-//                    viewer_position_y = -10.0f;// kDefaultFloorHeight;
+//                    viewer_position_y = -4.0f;// kDefaultFloorHeight;
 //                    viewer_position_z = 0.0f; //-2.0f;
+                    viewer_position_x = 0.0f;
+                    viewer_position_y = 0.0f;
+                    viewer_position_z = 0.0f;
                     LOGD("arthur setting up HEADSET");
                     setupServer();
                     LOGD("arthur setting up HEADSET DONE");
@@ -729,9 +722,7 @@ namespace ndk_hello_cardboard {
 
         if (isHeadset) {
             DrawRoom();
-            DrawCube();
             DrawController();
-//            DrawTarget();
         } else if (isController) {
             // Draw buttons on the controller screen; the virtual controller will be drawn in the headset.
         } else {
@@ -1044,4 +1035,17 @@ namespace ndk_hello_cardboard {
             LOGD("arthur connecting OK");
         }
     }
+
+    void HelloCardboardApp::PrintMatrix4x4(Matrix4x4 m){
+        LOGD("arthur matrix 4x4:");
+        for(int line=0; line < 4; line++) {
+            LOGD("arthur %f %f %f %f",
+                 m.m[line][0],
+                 m.m[line][1],
+                 m.m[line][2],
+                 m.m[line][3]);
+        }
+        LOGD("arthur matrix END");
+    }
+
 }  // namespace ndk_hello_cardboard
